@@ -29,6 +29,13 @@ async fn install_mod(instance_id: String, version: Version) -> Result<(), String
 }
 
 #[tauri::command]
+async fn install_modpack(instance_id: String, version: Version) -> Result<(), String> {
+    core::mod_manager::install_modpack(&instance_id, &version)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_java_download_url(major_version: u32) -> Result<String, String> {
     core::java_manager::get_java_download_url(major_version)
         .await
@@ -202,6 +209,7 @@ pub fn run() {
       search_modrinth,
       get_modrinth_versions,
       install_mod,
+      install_modpack,
       get_java_download_url
     ])
     .setup(|app| {

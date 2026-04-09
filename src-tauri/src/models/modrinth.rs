@@ -73,3 +73,33 @@ pub struct Hashes {
     pub sha512: String,
     pub sha1: String,
 }
+
+// Modrinth Modpack (.mrpack) format structures
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackIndex {
+    pub format_version: u32,
+    pub game: String,
+    pub version_id: String,
+    pub name: String,
+    pub summary: Option<String>,
+    pub files: Vec<ModpackFile>,
+    pub dependencies: std::collections::HashMap<String, String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackFile {
+    pub path: String,
+    pub hashes: Hashes,
+    pub env: Option<ModpackEnv>,
+    pub downloads: Vec<String>,
+    pub file_size: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackEnv {
+    pub client: String, // "required", "optional", "unsupported"
+    pub server: String,
+}
