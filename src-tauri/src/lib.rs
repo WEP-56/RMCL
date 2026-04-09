@@ -1,7 +1,6 @@
 pub mod core;
 pub mod models;
 
-use crate::core::minecraft::VersionManifest;
 use crate::models::account::Account;
 use crate::models::instance::{Instance, LoaderType};
 use crate::models::manifest::VersionMeta;

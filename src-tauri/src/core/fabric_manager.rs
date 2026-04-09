@@ -1,6 +1,5 @@
 use crate::models::manifest::VersionMeta;
 use reqwest::Client;
-use std::fs;
 
 const FABRIC_META_URL: &str = "https://meta.fabricmc.net/v2";
 

@@ -1,5 +1,5 @@
 use reqwest::Client;
-use sha2::{Digest, Sha1};
+use sha1::{Digest, Sha1};
 use std::fs;
 use std::path::PathBuf;
 use futures::stream::{self, StreamExt};

@@ -24,14 +24,23 @@ pub async fn search_projects(
         facets.push(version_facets);
     }
 
-    let mut request = client.get(format!("{}/search", MODRINTH_API_URL))
-        .query(&[("query", query), ("limit", &limit.to_string()), ("offset", &offset.to_string())])
-        .header("User-Agent", "RustMCLauncher/0.1.0");
+    let limit_str = limit.to_string();
+    let offset_str = offset.to_string();
+    
+    let mut query_params = vec![
+        ("query", query.to_string()),
+        ("limit", limit_str),
+        ("offset", offset_str),
+    ];
 
     if !facets.is_empty() {
         let facets_json = serde_json::to_string(&facets)?;
-        request = request.query(&[("facets", facets_json)]);
+        query_params.push(("facets", facets_json));
     }
+
+    let request = client.get(format!("{}/search", MODRINTH_API_URL))
+        .query(&query_params)
+        .header("User-Agent", "RustMCLauncher/0.1.0");
 
     let response = request.send().await?;
     if !response.status().is_success() {
@@ -49,18 +58,21 @@ pub async fn get_project_versions(
 ) -> Result<Vec<Version>, anyhow::Error> {
     let client = Client::new();
     
-    let mut request = client.get(format!("{}/project/{}/version", MODRINTH_API_URL, project_id))
-        .header("User-Agent", "RustMCLauncher/0.1.0");
+    let mut query_params = Vec::new();
 
     if let Some(l) = loaders {
         let json = serde_json::to_string(&l)?;
-        request = request.query(&[("loaders", json)]);
+        query_params.push(("loaders", json));
     }
 
     if let Some(gv) = game_versions {
         let json = serde_json::to_string(&gv)?;
-        request = request.query(&[("game_versions", json)]);
+        query_params.push(("game_versions", json));
     }
+
+    let request = client.get(format!("{}/project/{}/version", MODRINTH_API_URL, project_id))
+        .query(&query_params)
+        .header("User-Agent", "RustMCLauncher/0.1.0");
 
     let response = request.send().await?;
     if !response.status().is_success() {
