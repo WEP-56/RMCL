@@ -36,6 +36,8 @@ interface Account {
   username: string;
 }
 
+import { useLauncher } from '../contexts/LauncherContext';
+
 const Instances = () => {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -46,9 +48,8 @@ const Instances = () => {
   const [newLoader, setNewLoader] = useState('Vanilla');
   const [usePreset, setUsePreset] = useState(false);
 
-  const [launching, setLaunching] = useState(false);
-  const [logs, setLogs] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const { launchStatus, logs, launchInstance } = useLauncher();
 
   const fetchData = async () => {
     try {
@@ -66,21 +67,6 @@ const Instances = () => {
 
   useEffect(() => {
     fetchData();
-
-    // Listen for Minecraft Logs
-    const unlisten = listen<string>('mc-log', (event) => {
-      setLogs((prev) => [...prev.slice(-40), event.payload]);
-    });
-
-    const unlistenExit = listen<number>('mc-exit', (event) => {
-      setLaunching(false);
-      setLogs((prev) => [...prev, `[系统] 游戏进程已退出，退出码: ${event.payload}`]);
-    });
-
-    return () => {
-      unlisten.then(f => f());
-      unlistenExit.then(f => f());
-    };
   }, []);
 
   const handleCreate = async () => {
@@ -130,24 +116,8 @@ const Instances = () => {
       alert("请先在账号页面添加一个离线账号！");
       return;
     }
-    
-    try {
-      setLaunching(true);
-      setLogs(['[系统] 正在准备启动环境...']);
-      
-      // TODO: Make this dynamic via user settings
-      const javaPath = 'java'; 
-      
-      await invoke('launch_minecraft', {
-        instanceId: instanceId,
-        username: accounts[0].username,
-        javaPath: javaPath
-      });
-    } catch (e) {
-      console.error(e);
-      setLaunching(false);
-      alert("启动失败: " + e);
-    }
+    const javaPath = 'java'; 
+    launchInstance(instanceId, accounts[0].username, javaPath);
   };
 
   return (
@@ -316,13 +286,17 @@ const Instances = () => {
                   <Button appearance="transparent" icon={<Trash2 size={18} color="#ff6b6b" />} onClick={() => handleDelete(inst.id)} />
                 </div>
                 <Button 
-                  appearance="primary" 
+                  appearance={launchStatus === 'idle' || launchStatus === 'error' ? 'primary' : 'secondary'} 
                   icon={<Play size={18} />} 
-                  disabled={launching}
+                  disabled={launchStatus !== 'idle' && launchStatus !== 'error'}
                   onClick={() => handleLaunch(inst.id)}
-                  style={{ backgroundColor: '#60CDFF', color: '#000', padding: '6px 16px' }}
+                  style={{ 
+                    backgroundColor: launchStatus === 'idle' || launchStatus === 'error' ? '#60CDFF' : 'rgba(255,255,255,0.1)', 
+                    color: launchStatus === 'idle' || launchStatus === 'error' ? '#000' : 'rgba(255,255,255,0.5)', 
+                    padding: '6px 16px' 
+                  }}
                 >
-                  启动
+                  {launchStatus === 'preparing' ? '准备中...' : launchStatus === 'running' ? '运行中' : '启动'}
                 </Button>
               </div>
             </Card>
@@ -331,7 +305,7 @@ const Instances = () => {
       )}
 
       {/* 实时日志终端面板 */}
-      {launching && (
+      {launchStatus !== 'idle' && (
         <div style={{
           position: 'absolute',
           bottom: 0, left: 0, right: 0,
@@ -351,15 +325,15 @@ const Instances = () => {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
             <Text weight="semibold" style={{ color: '#60CDFF' }}>启动控制台</Text>
-            <ProgressBar thickness="large" style={{ width: '150px' }} />
+            {launchStatus === 'preparing' && <ProgressBar thickness="large" style={{ width: '150px' }} />}
           </div>
-          <div style={{ color: '#4CAF50', marginBottom: '8px' }}>--- 正在校验并下载资源，首次启动时间可能较长，请耐心等待 ---</div>
+          <div style={{ color: '#4CAF50', marginBottom: '8px' }}>--- {launchStatus === 'running' ? '游戏运行中...' : '正在校验并下载资源，首次启动时间可能较长，请耐心等待'} ---</div>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {logs.map((log, i) => {
               let color = '#cccccc';
-              if (log.includes('ERROR') || log.includes('Exception') || log.includes('failed')) color = '#ff6b6b';
+              if (log.includes('ERROR') || log.includes('Exception') || log.includes('failed') || log.includes('错误')) color = '#ff6b6b';
               if (log.includes('WARN')) color = '#ffdf89';
-              if (log.includes('INFO')) color = '#60CDFF';
+              if (log.includes('INFO') || log.includes('INFO]')) color = '#60CDFF';
               
               return (
                 <div key={i} style={{ color, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>

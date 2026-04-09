@@ -7,6 +7,8 @@ use crate::models::manifest::VersionMeta;
 use crate::models::modrinth::{SearchResult, Version};
 use std::collections::HashMap;
 
+use tauri::Emitter;
+
 #[tauri::command]
 async fn search_modrinth(query: String, project_type: Option<String>, limit: u32, offset: u32) -> Result<SearchResult, String> {
     core::modrinth_api::search_projects(&query, None, None, project_type.as_deref(), limit, offset)
@@ -48,16 +50,20 @@ async fn launch_minecraft(
     java_path: String,
 ) -> Result<(), String> {
     // 0. Get Instance info
+    let _ = app.emit("mc-log", format!("[INFO] 正在获取实例配置: {}...", instance_id));
     let instance = core::instance::get_instance_by_id(&instance_id).map_err(|e| e.to_string())?;
     let version_id = instance.mc_version.clone();
     
     // Resolve Java path
+    let _ = app.emit("mc-log", "[INFO] 正在探测本地 Java 运行环境...");
     let mut resolved_java_path = java_path;
     if resolved_java_path == "java" {
         resolved_java_path = core::java_manager::find_system_java();
     }
+    let _ = app.emit("mc-log", format!("[INFO] 最终 Java 路径: {}", resolved_java_path));
 
     // 1. Fetch metadata dynamically based on version_id
+    let _ = app.emit("mc-log", format!("[INFO] 正在获取 Minecraft {} 版本清单...", version_id));
     let manifest = core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())?;
     let version_info = manifest.versions.iter().find(|v| v.id == version_id)
         .ok_or_else(|| format!("Version {} not found in mojang manifest", version_id))?;
@@ -69,6 +75,7 @@ async fn launch_minecraft(
 
     // 1.5 If Fabric, merge the Fabric meta
     if let LoaderType::Fabric = instance.loader {
+        let _ = app.emit("mc-log", "[INFO] 检测到 Fabric，正在合并核心库...");
         if let Some(loader_ver) = &instance.loader_version {
             let fabric_meta = core::fabric_manager::fetch_fabric_meta(&version_id, loader_ver).await.map_err(|e| e.to_string())?;
             // Simple merge: add fabric libraries to vanilla meta
@@ -103,6 +110,7 @@ async fn launch_minecraft(
     }
 
     // 2. Download libraries and client
+    let _ = app.emit("mc-log", "[INFO] 正在下载游戏核心和依赖库 (这可能需要几分钟，请耐心等待)...");
     core::download_manager::download_libraries(&meta)
         .await
         .map_err(|e: anyhow::Error| e.to_string())?;
@@ -111,6 +119,7 @@ async fn launch_minecraft(
         .map_err(|e: anyhow::Error| e.to_string())?;
 
     // 3. Download Assets
+    let _ = app.emit("mc-log", "[INFO] 正在校验和下载游戏资源 (Assets)...");
     if let Some(asset_index) = &meta.asset_index {
         core::assets_manager::download_assets(&asset_index.url, &asset_index.id)
             .await
@@ -118,9 +127,11 @@ async fn launch_minecraft(
     }
 
     // 4. Extract Natives
+    let _ = app.emit("mc-log", "[INFO] 正在解压系统原生库 (Natives)...");
     let natives_dir = core::natives_extractor::extract_natives(&meta).map_err(|e| e.to_string())?;
 
     // 5. Build Classpath
+    let _ = app.emit("mc-log", "[INFO] 正在构建启动参数...");
     let classpath = core::launcher::build_classpath(&meta);
 
     // 6. Build Placeholders
@@ -176,6 +187,7 @@ async fn launch_minecraft(
     let working_dir = core::paths::get_minecraft_dir().to_string_lossy().to_string();
 
     // 8. Spawn process
+    let _ = app.emit("mc-log", "[INFO] 准备就绪，正在唤起 Java 进程...");
     core::process_manager::spawn_minecraft(app, &resolved_java_path, final_args, &working_dir)
         .await
         .map_err(|e| e.to_string())?;

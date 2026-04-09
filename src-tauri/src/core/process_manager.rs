@@ -35,9 +35,13 @@ pub async fn spawn_minecraft(
         }
     });
 
-    // Wait for game to exit
-    let status = child.wait().await?;
-    let _ = app_handle.emit("mc-exit", status.code().unwrap_or(-1));
+    let app_clone3 = app_handle.clone();
+    tokio::spawn(async move {
+        // Wait for game to exit in a separate task so we don't block the Tauri command
+        if let Ok(status) = child.wait().await {
+            let _ = app_clone3.emit("mc-exit", status.code().unwrap_or(-1));
+        }
+    });
 
     Ok(())
 }
