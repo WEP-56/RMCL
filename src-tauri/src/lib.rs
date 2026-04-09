@@ -5,6 +5,7 @@ use crate::models::account::Account;
 use crate::models::instance::{Instance, LoaderType};
 use crate::models::manifest::VersionMeta;
 use crate::models::modrinth::{SearchResult, Version};
+use crate::models::settings::AppSettings;
 use std::collections::HashMap;
 
 use tauri::Emitter;
@@ -175,8 +176,11 @@ async fn launch_minecraft(
     // 7. Parse Arguments
     let mut final_args = Vec::new();
     
+    // Get max memory from settings
+    let max_memory = core::config::load_settings().map(|s| s.max_memory).unwrap_or(2048);
+
     // Add memory and Natives
-    final_args.push("-Xmx2G".to_string());
+    final_args.push(format!("-Xmx{}M", max_memory));
     final_args.push("-XX:+UnlockExperimentalVMOptions".to_string());
     final_args.push("-XX:+UseG1GC".to_string());
     final_args.push("-XX:G1NewSizePercent=20".to_string());
@@ -277,6 +281,16 @@ fn delete_instance(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_settings() -> Result<AppSettings, String> {
+    core::config::load_settings().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn save_settings(settings: AppSettings) -> Result<(), String> {
+    core::config::save_settings(&settings).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_minecraft_versions() -> Result<crate::core::minecraft::VersionManifest, String> {
     core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())
 }
@@ -300,9 +314,13 @@ pub fn run() {
       get_modrinth_versions,
       install_mod,
       install_modpack,
-      get_java_download_url
+      get_java_download_url,
+      get_settings,
+      save_settings
     ])
     .setup(|app| {
+            app.handle().plugin(tauri_plugin_dialog::init())?;
+            app.handle().plugin(tauri_plugin_fs::init())?;
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

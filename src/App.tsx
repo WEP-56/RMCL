@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Accounts from './pages/Accounts';
 import Instances from './pages/Instances';
 import Market from './pages/Market';
+import Settings from './pages/Settings';
 
 const App = () => {
   return (
@@ -13,7 +14,7 @@ const App = () => {
         <Route path="instances" element={<Instances />} />
         <Route path="market" element={<Market />} />
         <Route path="accounts" element={<Accounts />} />
-        <Route path="settings" element={<div><h1>全局设置</h1><p>Java 路径配置等设置将在这里显示。</p></div>} />
+        <Route path="settings" element={<Settings />} />
       </Route>
     </Routes>
   );

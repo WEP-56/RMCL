@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
 import {
   Button,
   Input,
   Card,
-  CardHeader,
   Text,
   Spinner,
   Dialog,
@@ -116,7 +114,17 @@ const Instances = () => {
       alert("请先在账号页面添加一个离线账号！");
       return;
     }
-    const javaPath = 'java'; 
+    
+    let javaPath = 'java';
+    try {
+      const settings = await invoke<{ javaPath: string }>('get_settings');
+      if (settings.javaPath) {
+        javaPath = settings.javaPath;
+      }
+    } catch (e) {
+      console.warn("获取设置失败，使用默认 java 路径", e);
+    }
+    
     launchInstance(instanceId, accounts[0].username, javaPath);
   };
 

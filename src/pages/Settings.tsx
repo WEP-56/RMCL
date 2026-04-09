@@ -1,0 +1,229 @@
+import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
+import {
+  Button,
+  Input,
+  Card,
+  CardHeader,
+  Text,
+  Spinner,
+  Toast,
+  ToastTitle,
+  Toaster,
+  useToastController,
+  useId,
+  Slider,
+  Label
+} from '@fluentui/react-components';
+import { Folder, Coffee, Save, RotateCcw, Cpu } from 'lucide-react';
+
+interface AppSettings {
+  javaPath: string;
+  maxMemory: number;
+  gameDirectory: string | null;
+}
+
+const Settings = () => {
+  const [settings, setSettings] = useState<AppSettings>({
+    javaPath: 'java',
+    maxMemory: 2048,
+    gameDirectory: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  
+  const toasterId = useId('toaster');
+  const { dispatchToast } = useToastController(toasterId);
+
+  const fetchSettings = async () => {
+    try {
+      setLoading(true);
+      const res = await invoke<AppSettings>('get_settings');
+      setSettings(res);
+    } catch (e) {
+      console.error('Failed to load settings', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      await invoke('save_settings', { settings });
+      dispatchToast(
+        <Toast>
+          <ToastTitle>设置已保存</ToastTitle>
+        </Toast>,
+        { intent: 'success' }
+      );
+    } catch (e) {
+      console.error(e);
+      dispatchToast(
+        <Toast>
+          <ToastTitle>保存失败: {String(e)}</ToastTitle>
+        </Toast>,
+        { intent: 'error' }
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSelectGameDir = async () => {
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: '选择游戏数据存储目录 (.minecraft)'
+      });
+      if (selected && typeof selected === 'string') {
+        setSettings({ ...settings, gameDirectory: selected });
+      }
+    } catch (e) {
+      console.error('Failed to open dialog', e);
+    }
+  };
+
+  const handleSelectJavaPath = async () => {
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: '选择 Java 可执行文件',
+        filters: [{
+          name: 'Executable',
+          extensions: ['exe', '']
+        }]
+      });
+      if (selected && typeof selected === 'string') {
+        setSettings({ ...settings, javaPath: selected });
+      }
+    } catch (e) {
+      console.error('Failed to open dialog', e);
+    }
+  };
+
+  const resetGameDir = () => {
+    setSettings({ ...settings, gameDirectory: null });
+  };
+
+  const resetJavaPath = () => {
+    setSettings({ ...settings, javaPath: 'java' });
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, height: '100%' }}>
+        <Spinner size="huge" />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', maxWidth: '800px', margin: '0 auto' }}>
+      <Toaster toasterId={toasterId} />
+      
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600, color: 'rgba(255, 255, 255, 0.9)' }}>全局设置</h1>
+          <p style={{ margin: '4px 0 0 0', color: 'rgba(255, 255, 255, 0.5)', fontSize: '14px' }}>
+            配置游戏路径、Java 运行环境以及性能参数。
+          </p>
+        </div>
+        <Button 
+          appearance="primary" 
+          icon={<Save size={16} />} 
+          onClick={handleSave} 
+          disabled={saving}
+          style={{ backgroundColor: '#60CDFF', color: '#000' }}
+        >
+          {saving ? '保存中...' : '保存更改'}
+        </Button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        
+        {/* Game Directory Section */}
+        <Card style={{ 
+          backgroundColor: 'rgba(255,255,255,0.03)', 
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+        }}>
+          <CardHeader
+            header={<Text weight="semibold" size={400} style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Folder size={18} color="#60CDFF" /> 游戏数据目录</Text>}
+            description={<Text size={200} style={{ color: 'gray' }}>自定义 `.minecraft` 文件夹的位置，所有的实例、模组、存档都会存储在此处。</Text>}
+          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+            <Input 
+              value={settings.gameDirectory || ''} 
+              placeholder="默认路径 (AppData/Roaming/RustMCLauncher/.minecraft)" 
+              readOnly
+              style={{ flex: 1 }}
+            />
+            <Button appearance="secondary" onClick={handleSelectGameDir}>浏览...</Button>
+            <Button appearance="transparent" icon={<RotateCcw size={16} />} onClick={resetGameDir} title="恢复默认" />
+          </div>
+        </Card>
+
+        {/* Java Path Section */}
+        <Card style={{ 
+          backgroundColor: 'rgba(255,255,255,0.03)', 
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+        }}>
+          <CardHeader
+            header={<Text weight="semibold" size={400} style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Coffee size={18} color="#ffdf89" /> Java 路径</Text>}
+            description={<Text size={200} style={{ color: 'gray' }}>指定启动 Minecraft 所使用的 Java 可执行文件 (javaw.exe) 路径。</Text>}
+          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+            <Input 
+              value={settings.javaPath} 
+              onChange={(_e, data) => setSettings({ ...settings, javaPath: data.value })}
+              placeholder="例如：C:\Program Files\Java\jdk-17\bin\javaw.exe 或 java" 
+              style={{ flex: 1 }}
+            />
+            <Button appearance="secondary" onClick={handleSelectJavaPath}>浏览...</Button>
+            <Button appearance="transparent" icon={<RotateCcw size={16} />} onClick={resetJavaPath} title="恢复默认 (自动探测)" />
+          </div>
+          <Text size={100} style={{ color: 'rgba(255,255,255,0.4)', marginTop: '8px', display: 'block' }}>
+            提示：保持为 "java" 时，启动器将尝试自动从系统环境变量或常见目录中探测合适的 Java 版本。
+          </Text>
+        </Card>
+
+        {/* Memory Allocation Section */}
+        <Card style={{ 
+          backgroundColor: 'rgba(255,255,255,0.03)', 
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+        }}>
+          <CardHeader
+            header={<Text weight="semibold" size={400} style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Cpu size={18} color="#ffdf89" /> 内存分配</Text>}
+            description={<Text size={200} style={{ color: 'gray' }}>设置分配给 Minecraft 的最大运行内存 (建议 2048MB - 4096MB)。</Text>}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Label>最大内存: {settings.maxMemory} MB</Label>
+              <Text size={200} style={{ color: 'rgba(255,255,255,0.5)' }}>{(settings.maxMemory / 1024).toFixed(1)} GB</Text>
+            </div>
+            <Slider 
+              min={1024} 
+              max={16384} 
+              step={512} 
+              value={settings.maxMemory} 
+              onChange={(_e, data) => setSettings({ ...settings, maxMemory: data.value })}
+            />
+          </div>
+        </Card>
+
+      </div>
+    </div>
+  );
+};
+
+export default Settings;
