@@ -37,3 +37,6 @@ target/
 # Build artifacts
 build/
 out/
+
+example-project
+计划文档.md
