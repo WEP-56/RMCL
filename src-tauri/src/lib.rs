@@ -72,12 +72,9 @@ async fn launch_minecraft(
         if let Some(loader_ver) = &instance.loader_version {
             let fabric_meta = core::fabric_manager::fetch_fabric_meta(&version_id, loader_ver).await.map_err(|e| e.to_string())?;
             // Simple merge: add fabric libraries to vanilla meta
-            if let Some(mut vanilla_libs) = meta.libraries.take() {
-                if let Some(mut fabric_libs) = fabric_meta.libraries {
-                    vanilla_libs.append(&mut fabric_libs);
-                }
-                meta.libraries = Some(vanilla_libs);
-            }
+            let mut fabric_libs = fabric_meta.libraries;
+            meta.libraries.append(&mut fabric_libs);
+
             // Use fabric's main class and args
             meta.main_class = fabric_meta.main_class;
             // Merge arguments
