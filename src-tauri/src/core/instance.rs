@@ -12,6 +12,15 @@ pub fn get_instances_dir() -> PathBuf {
     path
 }
 
+pub fn save_instance(instance: &Instance) -> Result<(), anyhow::Error> {
+    let mut instance_dir = get_instances_dir();
+    instance_dir.push(&instance.id);
+    let config_path = instance_dir.join("instance.json");
+    let json = serde_json::to_string_pretty(instance)?;
+    fs::write(config_path, json)?;
+    Ok(())
+}
+
 pub fn create_instance(
     name: String,
     mc_version: String,
@@ -38,6 +47,12 @@ pub fn create_instance(
     fs::write(config_path, json)?;
 
     Ok(instance)
+}
+
+pub fn get_instance_by_id(id: &str) -> Result<Instance, anyhow::Error> {
+    let instances = load_instances()?;
+    instances.into_iter().find(|i| i.id == id)
+        .ok_or_else(|| anyhow::anyhow!("Instance not found"))
 }
 
 pub fn load_instances() -> Result<Vec<Instance>, anyhow::Error> {

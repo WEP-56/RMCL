@@ -1,5 +1,6 @@
 use crate::core::downloader::{download_files, DownloadTask};
 use crate::models::modrinth::{Version, ModpackIndex};
+use crate::models::instance::{Instance, LoaderType};
 use std::fs;
 use std::path::PathBuf;
 use std::io::{Read, Write};
@@ -46,10 +47,9 @@ pub async fn install_mod_version(
 }
 
 pub async fn install_modpack(
-    instance_id: &str,
+    name: &str,
     version: &Version,
-) -> Result<(), anyhow::Error> {
-    let instance_dir = get_instance_dir(instance_id);
+) -> Result<Instance, anyhow::Error> {
     let target_file = version.files.iter().find(|f| f.primary).unwrap_or_else(|| &version.files[0]);
     
     // 1. Download the .mrpack file to a temporary location
@@ -80,17 +80,30 @@ pub async fn install_modpack(
 
     let index: ModpackIndex = serde_json::from_str(&index_content)?;
 
-    // 3. Download all mods defined in the index
+    // 3. Create the Instance based on dependencies
+    let mc_version = index.dependencies.get("minecraft")
+        .cloned()
+        .unwrap_or_else(|| "1.20.1".to_string());
+    
+    let mut loader = LoaderType::Vanilla;
+    if index.dependencies.contains_key("fabric-loader") {
+        loader = LoaderType::Fabric;
+    } else if index.dependencies.contains_key("forge") {
+        loader = LoaderType::Forge;
+    }
+
+    let instance = crate::core::instance::create_instance(name.to_string(), mc_version.clone(), loader)?;
+    let instance_dir = get_instance_dir(&instance.id);
+
+    // 4. Download all mods defined in the index
     let mut download_tasks = Vec::new();
     for file_info in &index.files {
-        // Skip server-only mods
         if let Some(env) = &file_info.env {
             if env.client == "unsupported" {
                 continue;
             }
         }
 
-        // Construct the correct target path inside the instance (e.g., mods/sodium.jar)
         let target_path = instance_dir.join(&file_info.path);
         
         if let Some(url) = file_info.downloads.first() {
@@ -107,7 +120,7 @@ pub async fn install_modpack(
         download_files(download_tasks, 16).await?;
     }
 
-    // 4. Extract overrides (configs, resourcepacks, scripts, etc.)
+    // 5. Extract overrides
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         let outpath = match file.enclosed_name() {
@@ -115,8 +128,6 @@ pub async fn install_modpack(
             None => continue,
         };
 
-        // Modrinth pack overrides are usually inside an "overrides/" folder
-        // We need to strip "overrides/" and extract the rest to instance root
         if let Ok(stripped) = outpath.strip_prefix("overrides/") {
             let target_path = instance_dir.join(stripped);
 
@@ -132,8 +143,8 @@ pub async fn install_modpack(
         }
     }
 
-    // 5. Cleanup
+    // 6. Cleanup
     fs::remove_dir_all(temp_dir)?;
 
-    Ok(())
+    Ok(instance)
 }

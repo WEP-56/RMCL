@@ -125,7 +125,7 @@ const Instances = () => {
     }
   };
 
-  const handleLaunch = async (version: string) => {
+  const handleLaunch = async (instanceId: string) => {
     if (accounts.length === 0) {
       alert("请先在账号页面添加一个离线账号！");
       return;
@@ -139,7 +139,7 @@ const Instances = () => {
       const javaPath = 'java'; 
       
       await invoke('launch_minecraft', {
-        versionId: version,
+        instanceId: instanceId,
         username: accounts[0].username,
         javaPath: javaPath
       });
@@ -319,7 +319,7 @@ const Instances = () => {
                   appearance="primary" 
                   icon={<Play size={18} />} 
                   disabled={launching}
-                  onClick={() => handleLaunch(inst.mc_version)}
+                  onClick={() => handleLaunch(inst.id)}
                   style={{ backgroundColor: '#60CDFF', color: '#000', padding: '6px 16px' }}
                 >
                   启动

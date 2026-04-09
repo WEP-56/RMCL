@@ -29,8 +29,8 @@ async fn install_mod(instance_id: String, version: Version) -> Result<(), String
 }
 
 #[tauri::command]
-async fn install_modpack(instance_id: String, version: Version) -> Result<(), String> {
-    core::mod_manager::install_modpack(&instance_id, &version)
+async fn install_modpack(name: String, version: Version) -> Result<Instance, String> {
+    core::mod_manager::install_modpack(&name, &version)
         .await
         .map_err(|e| e.to_string())
 }
@@ -43,15 +43,67 @@ async fn get_java_download_url(major_version: u32) -> Result<String, String> {
 }#[tauri::command]
 async fn launch_minecraft(
     app: tauri::AppHandle,
-    version_id: String,
+    instance_id: String,
     username: String,
     java_path: String,
 ) -> Result<(), String> {
-    // 1. Fetch metadata
-    let url = "https://piston-meta.mojang.com/v1/packages/8c198a22dbaa8c88939023405fa0cd9563fc8a26/1.20.1.json"; // Hardcoded for demo, should lookup from manifest
-    let meta = core::resolver::fetch_version_meta(&version_id, url)
+    // 0. Get Instance info
+    let instance = core::instance::get_instance_by_id(&instance_id).map_err(|e| e.to_string())?;
+    let version_id = instance.mc_version.clone();
+    
+    // Resolve Java path
+    let mut resolved_java_path = java_path;
+    if resolved_java_path == "java" {
+        resolved_java_path = core::java_manager::find_system_java();
+    }
+
+    // 1. Fetch metadata dynamically based on version_id
+    let manifest = core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())?;
+    let version_info = manifest.versions.iter().find(|v| v.id == version_id)
+        .ok_or_else(|| format!("Version {} not found in mojang manifest", version_id))?;
+    
+    let url = &version_info.url;
+    let mut meta = core::resolver::fetch_version_meta(&version_id, url)
         .await
         .map_err(|e| e.to_string())?;
+
+    // 1.5 If Fabric, merge the Fabric meta
+    if let LoaderType::Fabric = instance.loader {
+        if let Some(loader_ver) = &instance.loader_version {
+            let fabric_meta = core::fabric_manager::fetch_fabric_meta(&version_id, loader_ver).await.map_err(|e| e.to_string())?;
+            // Simple merge: add fabric libraries to vanilla meta
+            if let Some(mut vanilla_libs) = meta.libraries.take() {
+                if let Some(mut fabric_libs) = fabric_meta.libraries {
+                    vanilla_libs.append(&mut fabric_libs);
+                }
+                meta.libraries = Some(vanilla_libs);
+            }
+            // Use fabric's main class and args
+            meta.main_class = fabric_meta.main_class;
+            // Merge arguments
+            if let Some(mut vanilla_args) = meta.arguments.take() {
+                if let Some(mut fabric_args) = fabric_meta.arguments {
+                    if let Some(ref mut v_game) = vanilla_args.game {
+                        if let Some(mut f_game) = fabric_args.game.take() {
+                            v_game.append(&mut f_game);
+                        }
+                    } else {
+                        vanilla_args.game = fabric_args.game.take();
+                    }
+                    if let Some(ref mut v_jvm) = vanilla_args.jvm {
+                        if let Some(mut f_jvm) = fabric_args.jvm.take() {
+                            v_jvm.append(&mut f_jvm);
+                        }
+                    } else {
+                        vanilla_args.jvm = fabric_args.jvm.take();
+                    }
+                }
+                meta.arguments = Some(vanilla_args);
+            } else {
+                meta.arguments = fabric_meta.arguments;
+            }
+        }
+    }
 
     // 2. Download libraries and client
     core::download_manager::download_libraries(&meta)
@@ -127,7 +179,7 @@ async fn launch_minecraft(
     let working_dir = core::paths::get_minecraft_dir().to_string_lossy().to_string();
 
     // 8. Spawn process
-    core::process_manager::spawn_minecraft(app, &java_path, final_args, &working_dir)
+    core::process_manager::spawn_minecraft(app, &resolved_java_path, final_args, &working_dir)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -159,12 +211,16 @@ fn get_accounts() -> Result<Vec<Account>, String> {
 
 #[tauri::command]
 async fn create_instance(name: String, mc_version: String, loader: LoaderType, use_performance_preset: bool) -> Result<Instance, String> {
-    let instance = core::instance::create_instance(name, mc_version.clone(), loader.clone()).map_err(|e| e.to_string())?;
+    let mut instance = core::instance::create_instance(name, mc_version.clone(), loader.clone()).map_err(|e| e.to_string())?;
 
     // If using Fabric, fetch its meta automatically
     if let LoaderType::Fabric = loader {
         if let Ok(loader_version) = core::fabric_manager::fetch_latest_fabric_loader(&mc_version).await {
             let _ = core::fabric_manager::fetch_fabric_meta(&mc_version, &loader_version).await;
+            
+            // Update instance with loader version
+            instance.loader_version = Some(loader_version);
+            let _ = core::instance::save_instance(&instance);
             
             // If performance preset is requested, install sodium/iris/lithium
             if use_performance_preset {

@@ -67,6 +67,7 @@ const Market = () => {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
   const [selectedVersionId, setSelectedVersionId] = useState<string>('');
+  const [newModpackName, setNewModpackName] = useState<string>('');
 
   const fetchInstances = async () => {
     try {
@@ -108,6 +109,9 @@ const Market = () => {
     setSelectedProject(project);
     setVersions([]);
     setSelectedVersionId('');
+    if (projectType === 'modpack') {
+      setNewModpackName(project.title);
+    }
     try {
       setVersionsLoading(true);
       const res = await invoke<ModVersion[]>('get_modrinth_versions', { 
@@ -123,7 +127,10 @@ const Market = () => {
   };
 
   const handleInstall = async () => {
-    if (!selectedInstanceId || !selectedVersionId) return;
+    if (!selectedVersionId) return;
+    if (projectType === 'mod' && !selectedInstanceId) return;
+    if (projectType === 'modpack' && !newModpackName) return;
+
     const versionData = versions.find(v => v.id === selectedVersionId);
     if (!versionData) return;
 
@@ -131,7 +138,7 @@ const Market = () => {
       if (projectType === 'modpack') {
         alert("整合包文件通常较大且包含大量前置模组，下载与解压可能需要数分钟，请耐心等待...");
         await invoke('install_modpack', { 
-          instanceId: selectedInstanceId, 
+          name: newModpackName, 
           version: versionData 
         });
         alert('整合包安装成功！你可以在实例列表中启动它了。');
@@ -254,7 +261,7 @@ const Market = () => {
                       <DialogTitle style={{ color: 'white' }}>{projectType === 'mod' ? '安装模组' : '安装整合包'}: {project.title}</DialogTitle>
                       <DialogContent>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingTop: '12px' }}>
-                          {projectType === 'mod' && (
+                          {projectType === 'mod' ? (
                             <div>
                               <Text weight="semibold" style={{ color: '#ccc' }}>1. 选择目标实例</Text>
                               <Dropdown 
@@ -264,6 +271,16 @@ const Market = () => {
                               >
                                 {instances.map(i => <Option key={i.id} value={i.id} text={`${i.name} (${i.mc_version})`}>{i.name} ({i.mc_version})</Option>)}
                               </Dropdown>
+                            </div>
+                          ) : (
+                            <div>
+                              <Text weight="semibold" style={{ color: '#ccc' }}>1. 新实例名称</Text>
+                              <Input 
+                                value={newModpackName}
+                                onChange={(_e, data) => setNewModpackName(data.value)}
+                                placeholder="输入新建实例的名称"
+                                style={{ width: '100%', marginTop: '8px' }}
+                              />
                             </div>
                           )}
 
