@@ -49,10 +49,10 @@ async fn launch_minecraft(
     // 2. Download libraries and client
     core::download_manager::download_libraries(&meta)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e: anyhow::Error| e.to_string())?;
     core::download_manager::download_client_jar(&meta)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e: anyhow::Error| e.to_string())?;
 
     // 3. Download Assets
     if let Some(asset_index) = &meta.asset_index {

@@ -38,7 +38,7 @@ pub async fn search_projects(
         query_params.push(("facets", facets_json));
     }
 
-    let request = client.get(format!("{}/search", MODRINTH_API_URL))
+    let request = client.get(&format!("{}/search", MODRINTH_API_URL))
         .query(&query_params)
         .header("User-Agent", "RustMCLauncher/0.1.0");
 
@@ -70,7 +70,7 @@ pub async fn get_project_versions(
         query_params.push(("game_versions", json));
     }
 
-    let request = client.get(format!("{}/project/{}/version", MODRINTH_API_URL, project_id))
+    let request = client.get(&format!("{}/project/{}/version", MODRINTH_API_URL, project_id))
         .query(&query_params)
         .header("User-Agent", "RustMCLauncher/0.1.0");
 
