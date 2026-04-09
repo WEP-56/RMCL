@@ -24,15 +24,15 @@ async fn get_modrinth_versions(project_id: String) -> Result<Vec<Version>, Strin
 }
 
 #[tauri::command]
-async fn install_mod(instance_id: String, version: Version) -> Result<(), String> {
-    core::mod_manager::install_mod_version(&instance_id, &version)
+async fn install_mod(app: tauri::AppHandle, instance_id: String, version: Version) -> Result<(), String> {
+    core::mod_manager::install_mod_version(&instance_id, &version, Some(app))
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn install_modpack(name: String, version: Version) -> Result<Instance, String> {
-    core::mod_manager::install_modpack(&name, &version)
+async fn install_modpack(app: tauri::AppHandle, name: String, version: Version) -> Result<Instance, String> {
+    core::mod_manager::install_modpack(&name, &version, Some(app))
         .await
         .map_err(|e| e.to_string())
 }

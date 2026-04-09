@@ -1,6 +1,5 @@
 use reqwest::Client;
 use std::env::consts;
-use std::path::PathBuf;
 use std::process::Command;
 
 pub fn find_system_java() -> String {

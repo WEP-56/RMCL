@@ -3,7 +3,7 @@ use crate::models::modrinth::{Version, ModpackIndex};
 use crate::models::instance::{Instance, LoaderType};
 use std::fs;
 use std::path::PathBuf;
-use std::io::{Read, Write};
+use std::io::Read;
 use zip::ZipArchive;
 
 pub fn get_instance_mods_dir(instance_id: &str) -> PathBuf {

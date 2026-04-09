@@ -59,9 +59,9 @@ pub async fn download_files(
         let instance_id_clone = instance_id.to_string();
 
         tokio::spawn(async move {
-            let mut skip = false;
+            let _skip = false;
             if check_file_validity(&task.path, &task.sha1) {
-                skip = true;
+                // _skip = true;
             } else {
                 if let Some(parent) = task.path.parent() {
                     let _ = fs::create_dir_all(parent);
