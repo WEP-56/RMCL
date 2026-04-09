@@ -8,8 +8,8 @@ use crate::models::modrinth::{SearchResult, Version};
 use std::collections::HashMap;
 
 #[tauri::command]
-async fn search_modrinth(query: String, limit: u32, offset: u32) -> Result<SearchResult, String> {
-    core::modrinth_api::search_projects(&query, None, None, limit, offset)
+async fn search_modrinth(query: String, project_type: Option<String>, limit: u32, offset: u32) -> Result<SearchResult, String> {
+    core::modrinth_api::search_projects(&query, None, None, project_type.as_deref(), limit, offset)
         .await
         .map_err(|e| e.to_string())
 }

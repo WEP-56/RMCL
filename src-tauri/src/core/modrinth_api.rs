@@ -7,6 +7,7 @@ pub async fn search_projects(
     query: &str,
     loaders: Option<Vec<&str>>,
     game_versions: Option<Vec<&str>>,
+    project_type: Option<&str>, // e.g., "mod", "modpack", "resourcepack"
     limit: u32,
     offset: u32,
 ) -> Result<SearchResult, anyhow::Error> {
@@ -22,6 +23,10 @@ pub async fn search_projects(
     if let Some(gv) = game_versions {
         let version_facets: Vec<String> = gv.iter().map(|v| format!("versions:{}", v)).collect();
         facets.push(version_facets);
+    }
+
+    if let Some(pt) = project_type {
+        facets.push(vec![format!("project_type:{}", pt)]);
     }
 
     let limit_str = limit.to_string();
