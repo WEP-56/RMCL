@@ -22,7 +22,25 @@ pub async fn fetch_version_meta(version_id: &str, url: &str) -> Result<VersionMe
 
     // Download if not exists or invalid
     let client = Client::new();
-    let response = client.get(url).send().await?;
+    
+    // Apply BMCLAPI mirror fallback if the URL is from mojang
+    let mut final_url = url.to_string();
+    if url.contains("piston-meta.mojang.com") || url.contains("launchermeta.mojang.com") {
+        let bmcl_url = url.replace("piston-meta.mojang.com", "bmclapi2.bangbang93.com")
+                          .replace("launchermeta.mojang.com", "bmclapi2.bangbang93.com");
+        
+        let response = match client.get(url).send().await {
+            Ok(res) if res.status().is_success() => res,
+            _ => client.get(&bmcl_url).send().await?
+        };
+        
+        let meta: VersionMeta = response.json().await?;
+        let json = serde_json::to_string_pretty(&meta)?;
+        fs::write(meta_path, json)?;
+        return Ok(meta);
+    }
+
+    let response = client.get(&final_url).send().await?;
     let meta: VersionMeta = response.json().await?;
 
     // Cache it locally

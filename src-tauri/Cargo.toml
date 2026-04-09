@@ -24,7 +24,7 @@ log = "0.4"
 tauri = { version = "2.10.3" }
 tauri-plugin-log = "2"
 window-vibrancy = "0.5.2"
-reqwest = { version = "0.12.9", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.9", features = ["json"] }
 tokio = { version = "1.51.1", features = ["full"] }
 uuid = { version = "1.20.0", features = ["v3", "v4"] }
 md-5 = "0.10.6"
