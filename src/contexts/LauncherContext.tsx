@@ -4,41 +4,66 @@ import { listen } from '@tauri-apps/api/event';
 
 export type LaunchStatus = 'idle' | 'preparing' | 'running' | 'error';
 
+export interface ProgressPayload {
+  instance_id: string;
+  task: string;
+  progress: number;
+  text: string;
+}
+
 interface LauncherContextType {
   launchStatus: LaunchStatus;
-  logs: string[];
+  activeInstanceId: string | null;
+  progressData: ProgressPayload | null;
   launchInstance: (instanceId: string, username: string, javaPath: string) => Promise<void>;
-  clearLogs: () => void;
+  resetLaunch: () => void;
 }
 
 const LauncherContext = createContext<LauncherContextType | undefined>(undefined);
 
 export const LauncherProvider = ({ children }: { children: ReactNode }) => {
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus>('idle');
-  const [logs, setLogs] = useState<string[]>([]);
+  const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
+  const [progressData, setProgressData] = useState<ProgressPayload | null>(null);
 
   useEffect(() => {
-    const unlistenLog = listen<string>('mc-log', (event) => {
-      setLogs((prev) => [...prev.slice(-100), event.payload]); // Keep last 100 logs
+    const unlistenProgress = listen<ProgressPayload>('mc-progress', (event) => {
+      setProgressData(event.payload);
     });
 
     const unlistenExit = listen<number>('mc-exit', (event) => {
       setLaunchStatus('idle');
-      setLogs((prev) => [...prev, `[系统] 游戏进程已退出，退出码: ${event.payload}`]);
+      setProgressData({
+        instance_id: activeInstanceId || '',
+        task: '已停止运行',
+        progress: 1.0,
+        text: `退出码: ${event.payload}`,
+      });
+      // 稍微延迟后清空状态，让用户能看到结束状态
+      setTimeout(() => {
+        setActiveInstanceId(null);
+        setProgressData(null);
+      }, 3000);
     });
 
     return () => {
-      unlistenLog.then((f) => f());
+      unlistenProgress.then((f) => f());
       unlistenExit.then((f) => f());
     };
-  }, []);
+  }, [activeInstanceId]);
 
   const launchInstance = async (instanceId: string, username: string, javaPath: string) => {
     if (launchStatus !== 'idle' && launchStatus !== 'error') return;
     
     try {
+      setActiveInstanceId(instanceId);
       setLaunchStatus('preparing');
-      setLogs(['[系统] 正在准备启动环境...']);
+      setProgressData({
+        instance_id: instanceId,
+        task: '准备启动环境...',
+        progress: -1.0,
+        text: '正在初始化'
+      });
       
       await invoke('launch_minecraft', {
         instanceId,
@@ -47,17 +72,32 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
       });
       
       setLaunchStatus('running');
+      setProgressData({
+        instance_id: instanceId,
+        task: '游戏运行中',
+        progress: 1.0,
+        text: 'Minecraft is running'
+      });
     } catch (e) {
       console.error(e);
       setLaunchStatus('error');
-      setLogs((prev) => [...prev, `[系统错误] 启动失败: ${e}`]);
+      setProgressData({
+        instance_id: instanceId,
+        task: '启动失败',
+        progress: 1.0,
+        text: String(e)
+      });
     }
   };
 
-  const clearLogs = () => setLogs([]);
+  const resetLaunch = () => {
+    setLaunchStatus('idle');
+    setActiveInstanceId(null);
+    setProgressData(null);
+  };
 
   return (
-    <LauncherContext.Provider value={{ launchStatus, logs, launchInstance, clearLogs }}>
+    <LauncherContext.Provider value={{ launchStatus, activeInstanceId, progressData, launchInstance, resetLaunch }}>
       {children}
     </LauncherContext.Provider>
   );

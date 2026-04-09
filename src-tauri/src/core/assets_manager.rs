@@ -1,11 +1,9 @@
 use crate::core::downloader::{download_files, DownloadTask};
 use crate::core::paths;
 use crate::models::manifest::AssetObjects;
-use reqwest::Client;
 use std::fs;
 
-pub async fn download_assets(asset_index_url: &str, asset_index_id: &str) -> Result<(), anyhow::Error> {
-    let client = Client::new();
+pub async fn download_assets(asset_index_url: &str, asset_index_id: &str, app: Option<tauri::AppHandle>, instance_id: &str) -> Result<(), anyhow::Error> {
     let assets_dir = paths::get_assets_dir();
     
     // Download and parse the asset index json
@@ -16,13 +14,17 @@ pub async fn download_assets(asset_index_url: &str, asset_index_id: &str) -> Res
     
     let index_file = indexes_dir.join(format!("{}.json", asset_index_id));
     
-    let index_json = if !index_file.exists() {
-        let res = client.get(asset_index_url).send().await?.text().await?;
-        fs::write(&index_file, &res)?;
-        res
-    } else {
-        fs::read_to_string(&index_file)?
-    };
+    if !index_file.exists() {
+        let task = DownloadTask {
+            url: asset_index_url.to_string(),
+            path: index_file.clone(),
+            sha1: None,
+            size: None,
+        };
+        download_files(vec![task], 1, app.clone(), instance_id, "下载资源索引").await?;
+    }
+    
+    let index_json = fs::read_to_string(&index_file)?;
 
     let asset_objects: AssetObjects = serde_json::from_str(&index_json)?;
     let objects_dir = assets_dir.join("objects");
@@ -44,7 +46,9 @@ pub async fn download_assets(asset_index_url: &str, asset_index_id: &str) -> Res
     }
 
     // Download assets with higher concurrency since they are many small files
-    download_files(tasks, 32).await?;
+    if !tasks.is_empty() {
+        download_files(tasks, 32, app, instance_id, "下载游戏资源(Assets)").await?;
+    }
     
     Ok(())
 }

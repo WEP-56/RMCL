@@ -25,6 +25,7 @@ pub fn get_instance_dir(instance_id: &str) -> PathBuf {
 pub async fn install_mod_version(
     instance_id: &str,
     version: &Version,
+    app: Option<tauri::AppHandle>,
 ) -> Result<(), anyhow::Error> {
     let mods_dir = get_instance_mods_dir(instance_id);
     let mut tasks = Vec::new();
@@ -41,7 +42,7 @@ pub async fn install_mod_version(
         size: Some(target_file.size as u64),
     });
 
-    download_files(tasks, 1).await?;
+    download_files(tasks, 1, app, instance_id, "安装模组").await?;
     
     Ok(())
 }
@@ -49,6 +50,7 @@ pub async fn install_mod_version(
 pub async fn install_modpack(
     name: &str,
     version: &Version,
+    app: Option<tauri::AppHandle>,
 ) -> Result<Instance, anyhow::Error> {
     let target_file = version.files.iter().find(|f| f.primary).unwrap_or_else(|| &version.files[0]);
     
@@ -64,7 +66,7 @@ pub async fn install_modpack(
         size: Some(target_file.size as u64),
     };
 
-    download_files(vec![task], 1).await?;
+    download_files(vec![task], 1, app.clone(), &uuid::Uuid::new_v4().to_string(), "下载整合包本体").await?;
 
     // 2. Unzip and parse the .mrpack
     let file = fs::File::open(&mrpack_path)?;
@@ -117,7 +119,7 @@ pub async fn install_modpack(
     }
 
     if !download_tasks.is_empty() {
-        download_files(download_tasks, 16).await?;
+        download_files(download_tasks, 16, app, &instance.id, "下载整合包模组").await?;
     }
 
     // 5. Extract overrides

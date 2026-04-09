@@ -5,7 +5,7 @@ pub async fn install_performance_preset(
     instance_id: &str,
     game_version: &str,
 ) -> Result<(), anyhow::Error> {
-    // Commonly used performance mods on Modrinth
+    // Commonly used performance mods on Modrinth (预装性能优化模组)
     let target_mods = vec!["sodium", "lithium", "iris"];
 
     for mod_slug in target_mods {
@@ -18,7 +18,7 @@ pub async fn install_performance_preset(
 
         if !versions.is_empty() {
             // Install the latest compatible version
-            install_mod_version(instance_id, &versions[0]).await?;
+            install_mod_version(instance_id, &versions[0], None).await?;
         }
     }
 

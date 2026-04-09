@@ -28,7 +28,7 @@ fn match_rule(rules: &Option<Vec<Rule>>) -> bool {
     true // If no rules, implicitly allowed
 }
 
-pub async fn download_libraries(meta: &VersionMeta) -> Result<(), anyhow::Error> {
+pub async fn download_libraries(meta: &VersionMeta, app: Option<tauri::AppHandle>, instance_id: &str) -> Result<(), anyhow::Error> {
     let mut tasks = Vec::new();
     let lib_dir = paths::get_libraries_dir();
 
@@ -71,15 +71,16 @@ pub async fn download_libraries(meta: &VersionMeta) -> Result<(), anyhow::Error>
         }
     }
 
-    download_files(tasks, 16).await?;
+    download_files(tasks, 16, app, instance_id, "下载核心库").await?;
     Ok(())
 }
 
-pub async fn download_client_jar(meta: &VersionMeta) -> Result<(), anyhow::Error> {
+pub async fn download_client_jar(meta: &VersionMeta, app: Option<tauri::AppHandle>, instance_id: &str) -> Result<(), anyhow::Error> {
     if let Some(downloads) = &meta.downloads {
         if let Some(client) = downloads.get("client") {
             let mut path = paths::get_versions_dir();
             path.push(&meta.id);
+            std::fs::create_dir_all(&path)?;
             path.push(format!("{}.jar", meta.id));
 
             let task = DownloadTask {
@@ -89,7 +90,7 @@ pub async fn download_client_jar(meta: &VersionMeta) -> Result<(), anyhow::Error
                 size: Some(client.size),
             };
 
-            download_files(vec![task], 1).await?;
+            download_files(vec![task], 1, app, instance_id, "下载游戏核心").await?;
         }
     }
     Ok(())

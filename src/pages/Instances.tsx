@@ -49,7 +49,7 @@ const Instances = () => {
   const [usePreset, setUsePreset] = useState(false);
 
   const [creating, setCreating] = useState(false);
-  const { launchStatus, logs, launchInstance } = useLauncher();
+  const { launchStatus, activeInstanceId, progressData, launchInstance, resetLaunch } = useLauncher();
 
   const fetchData = async () => {
     try {
@@ -283,12 +283,12 @@ const Instances = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <Button appearance="transparent" icon={<SettingsIcon size={18} color="rgba(255,255,255,0.7)" />} />
-                  <Button appearance="transparent" icon={<Trash2 size={18} color="#ff6b6b" />} onClick={() => handleDelete(inst.id)} />
+                  <Button appearance="transparent" icon={<Trash2 size={18} color="#ff6b6b" />} onClick={() => handleDelete(inst.id)} disabled={launchStatus !== 'idle' && activeInstanceId === inst.id} />
                 </div>
                 <Button 
                   appearance={launchStatus === 'idle' || launchStatus === 'error' ? 'primary' : 'secondary'} 
                   icon={<Play size={18} />} 
-                  disabled={launchStatus !== 'idle' && launchStatus !== 'error'}
+                  disabled={launchStatus !== 'idle'}
                   onClick={() => handleLaunch(inst.id)}
                   style={{ 
                     backgroundColor: launchStatus === 'idle' || launchStatus === 'error' ? '#60CDFF' : 'rgba(255,255,255,0.1)', 
@@ -296,54 +296,42 @@ const Instances = () => {
                     padding: '6px 16px' 
                   }}
                 >
-                  {launchStatus === 'preparing' ? '准备中...' : launchStatus === 'running' ? '运行中' : '启动'}
+                  {activeInstanceId === inst.id && launchStatus === 'preparing' ? '准备中...' : activeInstanceId === inst.id && launchStatus === 'running' ? '运行中' : '启动'}
                 </Button>
               </div>
+
+              {/* 展开的进度条面板 */}
+              {activeInstanceId === inst.id && launchStatus !== 'idle' && progressData && (
+                <div style={{ 
+                  marginTop: '12px', 
+                  padding: '12px', 
+                  backgroundColor: 'rgba(0,0,0,0.2)', 
+                  borderRadius: '8px',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  animation: 'fadeIn 0.3s ease-out'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                    <Text size={200} weight="semibold" style={{ color: '#60CDFF' }}>{progressData.task}</Text>
+                    <Text size={200} style={{ color: 'rgba(255,255,255,0.5)' }}>{progressData.text}</Text>
+                  </div>
+                  {progressData.progress >= 0 ? (
+                    <ProgressBar value={progressData.progress} thickness="medium" style={{ width: '100%' }} />
+                  ) : (
+                    <ProgressBar thickness="medium" style={{ width: '100%' }} />
+                  )}
+                  {launchStatus === 'error' && (
+                    <div style={{ marginTop: '8px', textAlign: 'right' }}>
+                      <Button appearance="subtle" size="small" onClick={resetLaunch}>忽略</Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </Card>
           ))}
         </div>
       )}
 
-      {/* 实时日志终端面板 */}
-      {launchStatus !== 'idle' && (
-        <div style={{
-          position: 'absolute',
-          bottom: 0, left: 0, right: 0,
-          backgroundColor: 'rgba(10, 10, 10, 0.95)',
-          backdropFilter: 'blur(20px)',
-          borderRadius: '12px',
-          padding: '20px',
-          fontFamily: 'Consolas, monospace',
-          fontSize: '13px',
-          height: '250px',
-          overflowY: 'auto',
-          border: '1px solid rgba(255,255,255,0.1)',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.3)',
-          zIndex: 1000,
-          display: 'flex',
-          flexDirection: 'column'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <Text weight="semibold" style={{ color: '#60CDFF' }}>启动控制台</Text>
-            {launchStatus === 'preparing' && <ProgressBar thickness="large" style={{ width: '150px' }} />}
-          </div>
-          <div style={{ color: '#4CAF50', marginBottom: '8px' }}>--- {launchStatus === 'running' ? '游戏运行中...' : '正在校验并下载资源，首次启动时间可能较长，请耐心等待'} ---</div>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            {logs.map((log, i) => {
-              let color = '#cccccc';
-              if (log.includes('ERROR') || log.includes('Exception') || log.includes('failed') || log.includes('错误')) color = '#ff6b6b';
-              if (log.includes('WARN')) color = '#ffdf89';
-              if (log.includes('INFO') || log.includes('INFO]')) color = '#60CDFF';
-              
-              return (
-                <div key={i} style={{ color, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                  {log}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* Removed the global real-time log terminal completely */}
     </div>
   );
 };

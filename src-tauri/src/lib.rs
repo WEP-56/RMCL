@@ -60,7 +60,12 @@ async fn launch_minecraft(
     if resolved_java_path == "java" {
         resolved_java_path = core::java_manager::find_system_java();
     }
-    let _ = app.emit("mc-log", format!("[INFO] 最终 Java 路径: {}", resolved_java_path));
+    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
+        instance_id: instance_id.clone(),
+        task: "正在获取版本清单...".to_string(),
+        progress: -1.0,
+        text: "探测完成".to_string(),
+    });
 
     // 1. Fetch metadata dynamically based on version_id
     let _ = app.emit("mc-log", format!("[INFO] 正在获取 Minecraft {} 版本清单...", version_id));
@@ -72,6 +77,13 @@ async fn launch_minecraft(
     let mut meta = core::resolver::fetch_version_meta(&version_id, url)
         .await
         .map_err(|e| e.to_string())?;
+
+    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
+        instance_id: instance_id.clone(),
+        task: "合并 Fabric 库...".to_string(),
+        progress: -1.0,
+        text: "".to_string(),
+    });
 
     // 1.5 If Fabric, merge the Fabric meta
     if let LoaderType::Fabric = instance.loader {
@@ -110,28 +122,36 @@ async fn launch_minecraft(
     }
 
     // 2. Download libraries and client
-    let _ = app.emit("mc-log", "[INFO] 正在下载游戏核心和依赖库 (这可能需要几分钟，请耐心等待)...");
-    core::download_manager::download_libraries(&meta)
+    core::download_manager::download_libraries(&meta, Some(app.clone()), &instance_id)
         .await
         .map_err(|e: anyhow::Error| e.to_string())?;
-    core::download_manager::download_client_jar(&meta)
+    core::download_manager::download_client_jar(&meta, Some(app.clone()), &instance_id)
         .await
         .map_err(|e: anyhow::Error| e.to_string())?;
 
     // 3. Download Assets
-    let _ = app.emit("mc-log", "[INFO] 正在校验和下载游戏资源 (Assets)...");
     if let Some(asset_index) = &meta.asset_index {
-        core::assets_manager::download_assets(&asset_index.url, &asset_index.id)
+        core::assets_manager::download_assets(&asset_index.url, &asset_index.id, Some(app.clone()), &instance_id)
             .await
             .map_err(|e| e.to_string())?;
     }
 
     // 4. Extract Natives
-    let _ = app.emit("mc-log", "[INFO] 正在解压系统原生库 (Natives)...");
+    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
+        instance_id: instance_id.clone(),
+        task: "解压原生库...".to_string(),
+        progress: -1.0,
+        text: "提取 Natives 中".to_string(),
+    });
     let natives_dir = core::natives_extractor::extract_natives(&meta).map_err(|e| e.to_string())?;
 
     // 5. Build Classpath
-    let _ = app.emit("mc-log", "[INFO] 正在构建启动参数...");
+    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
+        instance_id: instance_id.clone(),
+        task: "构建启动参数...".to_string(),
+        progress: -1.0,
+        text: "生成 Classpath".to_string(),
+    });
     let classpath = core::launcher::build_classpath(&meta);
 
     // 6. Build Placeholders
@@ -187,7 +207,12 @@ async fn launch_minecraft(
     let working_dir = core::paths::get_minecraft_dir().to_string_lossy().to_string();
 
     // 8. Spawn process
-    let _ = app.emit("mc-log", "[INFO] 准备就绪，正在唤起 Java 进程...");
+    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
+        instance_id: instance_id.clone(),
+        task: "启动进程...".to_string(),
+        progress: -1.0,
+        text: "拉起 Java".to_string(),
+    });
     core::process_manager::spawn_minecraft(app, &resolved_java_path, final_args, &working_dir)
         .await
         .map_err(|e| e.to_string())?;
