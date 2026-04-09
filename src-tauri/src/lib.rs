@@ -184,6 +184,9 @@ async fn get_minecraft_versions() -> Result<crate::core::minecraft::VersionManif
     core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())
 }
 
+use window_vibrancy::{apply_mica, apply_acrylic};
+use tauri::Manager;
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -209,6 +212,17 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            let window = app.get_webview_window("main").unwrap();
+
+            #[cfg(target_os = "windows")]
+            {
+                // 尝试应用 Mica（仅 Win11），如果失败则回退到 Acrylic
+                if apply_mica(&window, Some(true)).is_err() {
+                    let _ = apply_acrylic(&window, Some((18, 18, 18, 125)));
+                }
+            }
+
             Ok(())
         })
         .run(tauri::generate_context!())

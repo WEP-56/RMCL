@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import TitleBar from '../components/TitleBar';
 
 const Layout = () => {
   return (
@@ -9,35 +10,28 @@ const Layout = () => {
       width: '100vw',
       backgroundColor: 'transparent',
     }}>
+      {/* 自定义拖拽标题栏 (Windows Mica 体验) */}
+      <TitleBar />
+
       {/* 侧边栏 */}
       <Sidebar />
 
       {/* 主内容区域 */}
       <div style={{
         flex: 1,
-        backgroundColor: 'rgba(28, 28, 28, 0.8)',
-        backdropFilter: 'blur(30px)',
+        backgroundColor: 'rgba(32, 32, 32, 0.4)',
+        backdropFilter: 'blur(20px)',
         overflowY: 'auto',
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
+        // 为了美观，给左上角一个微妙的圆角效果和发光边框，更符合 Win11
+        borderTopLeftRadius: '8px',
+        borderLeft: '1px solid rgba(255, 255, 255, 0.05)',
+        borderTop: '1px solid rgba(255, 255, 255, 0.05)',
       }}>
-        {/* 自定义拖拽标题栏 (Windows Mica 体验) */}
-        <div 
-          data-tauri-drag-region 
-          style={{
-            height: '32px',
-            width: '100%',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            zIndex: 100,
-            cursor: 'default'
-          }}
-        />
-        
         {/* 内容容器 */}
-        <div style={{ padding: '40px 32px 32px 32px', flex: 1, zIndex: 1 }}>
+        <div style={{ padding: '48px 32px 32px 32px', flex: 1, zIndex: 1 }}>
           <Outlet />
         </div>
       </div>

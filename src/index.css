@@ -4,7 +4,8 @@
   font-weight: 400;
 
   color-scheme: dark;
-  background-color: #202020; /* Dark fallback if mica fails */
+  /* Make sure the fallback color is dark enough, but transparent enough for Mica */
+  background-color: transparent; 
   color: #ffffff;
 
   font-synthesis: none;
