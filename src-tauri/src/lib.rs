@@ -152,12 +152,22 @@ fn get_accounts() -> Result<Vec<Account>, String> {
 }
 
 #[tauri::command]
-fn create_instance(
-    name: String,
-    mc_version: String,
-    loader: LoaderType,
-) -> Result<Instance, String> {
-    core::instance::create_instance(name, mc_version, loader).map_err(|e| e.to_string())
+async fn create_instance(name: String, mc_version: String, loader: LoaderType, use_performance_preset: bool) -> Result<Instance, String> {
+    let instance = core::instance::create_instance(name, mc_version.clone(), loader.clone()).map_err(|e| e.to_string())?;
+
+    // If using Fabric, fetch its meta automatically
+    if let LoaderType::Fabric = loader {
+        if let Ok(loader_version) = core::fabric_manager::fetch_latest_fabric_loader(&mc_version).await {
+            let _ = core::fabric_manager::fetch_fabric_meta(&mc_version, &loader_version).await;
+            
+            // If performance preset is requested, install sodium/iris/lithium
+            if use_performance_preset {
+                let _ = core::preset_manager::install_performance_preset(&instance.id, &mc_version).await;
+            }
+        }
+    }
+
+    Ok(instance)
 }
 
 #[tauri::command]

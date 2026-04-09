@@ -15,7 +15,10 @@ import {
   DialogBody,
   DialogActions,
   DialogContent,
-  ProgressBar
+  ProgressBar,
+  Dropdown,
+  Option,
+  Switch
 } from '@fluentui/react-components';
 import { Play, Plus, Trash2, Box } from 'lucide-react';
 
@@ -38,6 +41,8 @@ const Instances = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newName, setNewName] = useState('New Instance');
   const [newVersion, setNewVersion] = useState('1.20.1');
+  const [newLoader, setNewLoader] = useState('Vanilla');
+  const [usePreset, setUsePreset] = useState(false);
 
   const [launching, setLaunching] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
@@ -80,7 +85,8 @@ const Instances = () => {
       await invoke('create_instance', { 
         name: newName, 
         mcVersion: newVersion, 
-        loader: 'Vanilla' 
+        loader: newLoader,
+        usePerformancePreset: usePreset
       });
       setIsDialogOpen(false);
       fetchData();
@@ -147,6 +153,29 @@ const Instances = () => {
                     value={newVersion}
                     onChange={(_e, data) => setNewVersion(data.value)}
                   />
+                  <div>
+                    <Text weight="semibold" size={200} style={{ display: 'block', marginBottom: '4px' }}>Mod 加载器</Text>
+                    <Dropdown 
+                      value={newLoader}
+                      onOptionSelect={(_e, data) => setNewLoader(data.optionValue as string)}
+                      style={{ width: '100%' }}
+                    >
+                      <Option value="Vanilla">Vanilla (原版)</Option>
+                      <Option value="Fabric">Fabric</Option>
+                      <Option value="Forge" disabled>Forge (敬请期待)</Option>
+                    </Dropdown>
+                  </div>
+                  
+                  {newLoader === 'Fabric' && (
+                    <div style={{ marginTop: '8px' }}>
+                      <Switch 
+                        checked={usePreset} 
+                        onChange={(_e, data) => setUsePreset(data.checked)} 
+                        label="预装性能优化模组 (Sodium, Iris, Lithium)" 
+                      />
+                      <Text size={100} style={{ color: 'gray', display: 'block', marginLeft: '32px' }}>勾选后将自动为您安装这些优化帧数的必备模组</Text>
+                    </div>
+                  )}
                 </div>
               </DialogContent>
               <DialogActions>
