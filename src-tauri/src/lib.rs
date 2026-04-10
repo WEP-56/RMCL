@@ -447,8 +447,12 @@ pub fn run() {
 
             #[cfg(target_os = "windows")]
             {
-                // 尝试应用 Mica（仅 Win11），如果失败则不使用 Acrylic 以防止部分 Win10 机器白屏
-                let _ = apply_mica(&window, Some(true));
+                // 尝试应用 Mica（仅 Win11）
+                if apply_mica(&window, Some(true)).is_err() {
+                    // 如果系统不支持 Mica (比如 Win10)，则必须关闭 body 的透明背景，否则会出现白屏
+                    // 这里我们通过执行前端 JS 来动态移除 body 的 transparent 样式，恢复默认的深色背景
+                    let _ = window.eval("document.body.style.backgroundColor = '#202020'; document.documentElement.style.backgroundColor = '#202020';");
+                }
             }
 
             Ok(())

@@ -21,7 +21,7 @@ body, html {
   width: 100vw;
   overflow: hidden;
   /* Make background transparent so Tauri window transparency works (Mica effect) */
-  background: transparent !important;
+  background-color: transparent !important;
 }
 
 #root {
