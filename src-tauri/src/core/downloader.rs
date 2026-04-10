@@ -76,6 +76,8 @@ pub async fn download_files(
             if use_bmclapi {
                 if final_url.starts_with("https://resources.download.minecraft.net") {
                     final_url = final_url.replace("https://resources.download.minecraft.net", "https://bmclapi2.bangbang93.com/assets");
+                } else if final_url.starts_with("http://resources.download.minecraft.net") {
+                    final_url = final_url.replace("http://resources.download.minecraft.net", "https://bmclapi2.bangbang93.com/assets");
                 } else if final_url.starts_with("https://libraries.minecraft.net") {
                     final_url = final_url.replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/maven");
                 } else if final_url.starts_with("https://launcher.mojang.com") {
@@ -112,6 +114,16 @@ pub async fn download_files(
             let mut last_err = String::new();
 
             while attempts < max_attempts {
+                // If BMCLAPI fails, fallback to official Mojang source on the last attempt
+                if attempts == max_attempts - 1 && use_bmclapi {
+                    if final_url.contains("bmclapi2.bangbang93.com") {
+                        final_url = task.url.clone();
+                        if final_url.ends_with(':') {
+                            final_url.pop();
+                        }
+                    }
+                }
+
                 match client.get(&final_url).send().await {
                     Ok(response) => {
                         let status = response.status();
