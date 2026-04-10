@@ -304,6 +304,9 @@ fn delete_account(uuid: String) -> Result<(), String> {
     accounts.retain(|a| a.uuid != uuid);
     core::config::save_accounts(&accounts).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+fn get_accounts() -> Result<Vec<Account>, String> {
     core::config::load_accounts().map_err(|e| e.to_string())
 }
 
