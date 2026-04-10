@@ -1,7 +1,11 @@
 use reqwest::Client;
 use std::env::consts;
 use std::process::Command;
+use std::path::PathBuf;
+use std::fs::{self, File};
+use std::io::{Read, Write};
 use serde::{Serialize, Deserialize};
+use tauri::Emitter;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JavaInstallation {
@@ -172,4 +176,128 @@ pub async fn get_java_download_url(major_version: u32) -> Result<String, anyhow:
     // If not redirected, we can't get the direct link this way easily. 
     // Fallback: the URL itself will redirect the user's browser/downloader.
     Ok(url)
+}
+
+pub async fn download_and_extract_java(
+    major_version: u32,
+    app: tauri::AppHandle,
+    instance_id: &str,
+) -> Result<String, anyhow::Error> {
+    let url = get_java_download_url(major_version).await?;
+    let _ = app.emit("mc-progress", crate::core::downloader::ProgressPayload {
+        instance_id: instance_id.to_string(),
+        task: format!("下载 Java {}...", major_version),
+        progress: -1.0,
+        text: "正在下载 JRE".to_string(),
+    });
+
+    let java_dir = crate::core::paths::get_instances_dir().parent().unwrap().join("java");
+    if !java_dir.exists() {
+        fs::create_dir_all(&java_dir)?;
+    }
+
+    let target_dir = java_dir.join(major_version.to_string());
+    if target_dir.exists() {
+        // Find existing java executable
+        if let Some(exe) = find_java_executable_in_dir(&target_dir) {
+            return Ok(exe);
+        }
+    }
+
+    let is_zip = url.ends_with(".zip") || consts::OS == "windows";
+    let temp_file_path = java_dir.join(format!("java_{}.tmp", major_version));
+
+    // Download
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()?;
+    let response = client.get(&url).send().await?;
+    if !response.status().is_success() {
+        return Err(anyhow::anyhow!("Failed to download Java from {}: {}", url, response.status()));
+    }
+
+    let mut bytes = response.bytes().await?;
+    let mut file = File::create(&temp_file_path)?;
+    file.write_all(&bytes)?;
+
+    let _ = app.emit("mc-progress", crate::core::downloader::ProgressPayload {
+        instance_id: instance_id.to_string(),
+        task: format!("解压 Java {}...", major_version),
+        progress: -1.0,
+        text: "解压中...".to_string(),
+    });
+
+    // Extract
+    fs::create_dir_all(&target_dir)?;
+    if is_zip {
+        let zip_file = File::open(&temp_file_path)?;
+        let mut archive = zip::ZipArchive::new(zip_file)?;
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let outpath = match file.enclosed_name() {
+                Some(path) => target_dir.join(path),
+                None => continue,
+            };
+
+            if file.is_dir() {
+                fs::create_dir_all(&outpath)?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    fs::create_dir_all(p)?;
+                }
+                let mut outfile = File::create(&outpath)?;
+                std::io::copy(&mut file, &mut outfile)?;
+            }
+            
+            // Set permissions on Unix
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Some(mode) = file.unix_mode() {
+                    let _ = fs::set_permissions(&outpath, fs::Permissions::from_mode(mode));
+                }
+            }
+        }
+    } else {
+        // Tar Gz
+        let tar_gz = File::open(&temp_file_path)?;
+        let tar = flate2::read::GzDecoder::new(tar_gz);
+        let mut archive = tar::Archive::new(tar);
+        archive.unpack(&target_dir)?;
+    }
+
+    // Cleanup
+    let _ = fs::remove_file(&temp_file_path);
+
+    if let Some(exe) = find_java_executable_in_dir(&target_dir) {
+        // On Unix, ensure it is executable (in case tar didn't set it)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&exe)?.permissions();
+            perms.set_mode(0o755);
+            let _ = fs::set_permissions(&exe, perms);
+        }
+        return Ok(exe);
+    }
+
+    Err(anyhow::anyhow!("Failed to locate java executable in extracted directory"))
+}
+
+fn find_java_executable_in_dir(dir: &PathBuf) -> Option<String> {
+    let walk_dir = walkdir::WalkDir::new(dir);
+    let exe_name = if consts::OS == "windows" { "java.exe" } else { "java" };
+    
+    for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_file() && path.file_name().unwrap_or_default() == exe_name {
+            // make sure it's in a 'bin' directory to avoid finding other files named java
+            if let Some(parent) = path.parent() {
+                if parent.file_name().unwrap_or_default() == "bin" {
+                    return Some(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    None
 }

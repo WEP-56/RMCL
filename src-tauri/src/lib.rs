@@ -131,8 +131,17 @@ async fn launch_minecraft(
                 resolved_java_path = matched_java;
                 let _ = app.emit("mc-log", format!("[INFO] 匹配到合适的 Java: {}", resolved_java_path));
             } else {
-                let _ = app.emit("mc-log", format!("[WARN] 未能找到符合要求 (Java {}) 的运行环境，将尝试使用系统默认 Java", java_req.major_version));
-                resolved_java_path = core::java_manager::find_system_java();
+                let _ = app.emit("mc-log", format!("[WARN] 未能找到符合要求 (Java {}) 的本地运行环境，正在尝试自动下载...", java_req.major_version));
+                match core::java_manager::download_and_extract_java(java_req.major_version, app.clone(), &instance_id).await {
+                    Ok(downloaded_java) => {
+                        resolved_java_path = downloaded_java;
+                        let _ = app.emit("mc-log", format!("[INFO] 成功下载并配置了 Java: {}", resolved_java_path));
+                    }
+                    Err(e) => {
+                        let _ = app.emit("mc-log", format!("[ERROR] 自动下载 Java 失败: {}。将尝试使用系统默认 Java", e));
+                        resolved_java_path = core::java_manager::find_system_java();
+                    }
+                }
             }
         } else {
             resolved_java_path = core::java_manager::find_system_java();
