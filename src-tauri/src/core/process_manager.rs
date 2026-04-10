@@ -2,6 +2,7 @@ use tokio::process::Command;
 use std::process::Stdio;
 use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::time::{sleep, Duration};
 
 pub async fn spawn_minecraft(
     app_handle: tauri::AppHandle,
@@ -12,6 +13,9 @@ pub async fn spawn_minecraft(
     let _ = app_handle.emit("mc-log", format!("[INFO] Launching Java from: {}", java_path));
     let _ = app_handle.emit("mc-log", format!("[INFO] Working Directory: {}", working_dir));
     let _ = app_handle.emit("mc-log", format!("[INFO] Arguments: {:?}", args));
+    println!("[INFO] Launching Java from: {}", java_path);
+    println!("[INFO] Working Directory: {}", working_dir);
+    println!("[INFO] Arguments length: {}", args.len());
 
     let mut child = Command::new(java_path)
         .args(args)
@@ -19,6 +23,26 @@ pub async fn spawn_minecraft(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
+
+    sleep(Duration::from_millis(200)).await;
+    if let Some(status) = child.try_wait()? {
+        let output = child.wait_with_output().await?;
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let code = status.code().unwrap_or(-1);
+        let _ = app_handle.emit("mc-exit", code);
+        if !stdout.is_empty() {
+            println!("[MC-STDOUT] {}", stdout);
+        }
+        if !stderr.is_empty() {
+            println!("[MC-STDERR] {}", stderr);
+        }
+        return Err(anyhow::anyhow!(
+            "Minecraft exited immediately (code {}). stderr: {}",
+            code,
+            stderr
+        ));
+    }
 
     let stdout = child.stdout.take().expect("Failed to open stdout");
     let stderr = child.stderr.take().expect("Failed to open stderr");
