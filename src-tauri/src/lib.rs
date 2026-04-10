@@ -12,6 +12,28 @@ use tauri::Emitter;
 
 use crate::core::java_manager::JavaInstallation;
 
+use crate::core::mod_manager::LocalMod;
+
+#[tauri::command]
+fn get_local_mods(instance_id: String) -> Result<Vec<LocalMod>, String> {
+    crate::core::mod_manager::get_local_mods(&instance_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn toggle_mod(instance_id: String, mod_name: String, enabled: bool) -> Result<(), String> {
+    crate::core::mod_manager::toggle_mod(&instance_id, &mod_name, enabled).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_mod(instance_id: String, mod_name: String) -> Result<(), String> {
+    crate::core::mod_manager::delete_mod(&instance_id, &mod_name).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_instance_folder(instance_id: String) -> Result<(), String> {
+    crate::core::mod_manager::open_instance_folder(&instance_id).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn scan_java_installations() -> Result<Vec<JavaInstallation>, String> {
     Ok(crate::core::java_manager::scan_java_installations())
@@ -343,6 +365,10 @@ pub fn run() {
       get_modrinth_versions,
       install_mod,
       install_modpack,
+      get_local_mods,
+      toggle_mod,
+      delete_mod,
+      open_instance_folder,
       get_java_download_url,
       scan_java_installations,
       get_settings,

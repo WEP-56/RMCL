@@ -5,6 +5,14 @@ use std::fs;
 use std::path::PathBuf;
 use std::io::Read;
 use zip::ZipArchive;
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct LocalMod {
+    pub name: String,
+    pub path: String,
+    pub enabled: bool,
+}
 
 pub fn get_instance_mods_dir(instance_id: &str) -> PathBuf {
     let mut path = crate::core::instance::get_instances_dir();
@@ -149,4 +157,94 @@ pub async fn install_modpack(
     fs::remove_dir_all(temp_dir)?;
 
     Ok(instance)
+}
+
+pub fn get_local_mods(instance_id: &str) -> Result<Vec<LocalMod>, anyhow::Error> {
+    let mods_dir = get_instance_mods_dir(instance_id);
+    let mut mods = Vec::new();
+
+    if !mods_dir.exists() {
+        return Ok(mods);
+    }
+
+    for entry in fs::read_dir(mods_dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_file() {
+            let file_name = entry.file_name().to_string_lossy().to_string();
+            if file_name.ends_with(".jar") || file_name.ends_with(".jar.disabled") {
+                let enabled = file_name.ends_with(".jar");
+                mods.push(LocalMod {
+                    name: file_name,
+                    path: path.to_string_lossy().to_string(),
+                    enabled,
+                });
+            }
+        }
+    }
+
+    Ok(mods)
+}
+
+pub fn toggle_mod(instance_id: &str, mod_name: &str, enabled: bool) -> Result<(), anyhow::Error> {
+    let mods_dir = get_instance_mods_dir(instance_id);
+    let current_path = mods_dir.join(mod_name);
+    
+    if !current_path.exists() {
+        return Err(anyhow::anyhow!("Mod file not found"));
+    }
+
+    let new_name = if enabled {
+        if mod_name.ends_with(".disabled") {
+            mod_name.trim_end_matches(".disabled").to_string()
+        } else {
+            mod_name.to_string()
+        }
+    } else {
+        if !mod_name.ends_with(".disabled") {
+            format!("{}.disabled", mod_name)
+        } else {
+            mod_name.to_string()
+        }
+    };
+
+    let new_path = mods_dir.join(&new_name);
+    fs::rename(current_path, new_path)?;
+
+    Ok(())
+}
+
+pub fn delete_mod(instance_id: &str, mod_name: &str) -> Result<(), anyhow::Error> {
+    let mods_dir = get_instance_mods_dir(instance_id);
+    let path = mods_dir.join(mod_name);
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+pub fn open_instance_folder(instance_id: &str) -> Result<(), anyhow::Error> {
+    let dir = get_instance_dir(instance_id);
+    if !dir.exists() {
+        return Err(anyhow::anyhow!("Instance directory does not exist"));
+    }
+    
+    let path_str = dir.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    std::process::Command::new("explorer")
+        .arg(&path_str)
+        .spawn()?;
+
+    #[cfg(target_os = "macos")]
+    std::process::Command::new("open")
+        .arg(&path_str)
+        .spawn()?;
+
+    #[cfg(target_os = "linux")]
+    std::process::Command::new("xdg-open")
+        .arg(&path_str)
+        .spawn()?;
+
+    Ok(())
 }

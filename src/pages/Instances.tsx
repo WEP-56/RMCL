@@ -20,13 +20,19 @@ import {
   Label,
   Tag
 } from '@fluentui/react-components';
-import { Play, Plus, Trash2, Box, Settings as SettingsIcon, Package, Zap } from 'lucide-react';
+import { Play, Plus, Trash2, Box, Settings as SettingsIcon, Package, Zap, FolderOpen } from 'lucide-react';
 
 interface Instance {
   id: string;
   name: string;
   mc_version: string;
   loader: string; // Vanilla, Fabric, etc
+}
+
+interface LocalMod {
+  name: string;
+  path: string;
+  enabled: bool;
 }
 
 interface Account {
@@ -47,6 +53,13 @@ const Instances = () => {
   const [usePreset, setUsePreset] = useState(false);
 
   const [creating, setCreating] = useState(false);
+  
+  // Instance Manage State
+  const [manageInstance, setManageInstance] = useState<Instance | null>(null);
+  const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [localMods, setLocalMods] = useState<LocalMod[]>([]);
+  const [modsLoading, setModsLoading] = useState(false);
+
   const { launchStatus, activeInstanceId, progressData, launchInstance, resetLaunch } = useLauncher();
 
   const fetchData = async () => {
@@ -111,7 +124,7 @@ const Instances = () => {
 
   const handleLaunch = async (instanceId: string) => {
     if (accounts.length === 0) {
-      alert("请先在账号页面添加一个离线账号！");
+      alert("请先在账号页面添加一个账号！");
       return;
     }
     
@@ -126,6 +139,55 @@ const Instances = () => {
     }
     
     launchInstance(instanceId, accounts[0].username, javaPath);
+  };
+
+  const handleOpenManage = async (inst: Instance) => {
+    setManageInstance(inst);
+    setManageDialogOpen(true);
+    fetchMods(inst.id);
+  };
+
+  const fetchMods = async (instanceId: string) => {
+    try {
+      setModsLoading(true);
+      const res = await invoke<LocalMod[]>('get_local_mods', { instanceId });
+      setLocalMods(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setModsLoading(false);
+    }
+  };
+
+  const handleToggleMod = async (mod: LocalMod, enabled: boolean) => {
+    if (!manageInstance) return;
+    try {
+      await invoke('toggle_mod', { instanceId: manageInstance.id, modName: mod.name, enabled });
+      fetchMods(manageInstance.id);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleDeleteMod = async (modName: string) => {
+    if (!manageInstance) return;
+    if (confirm(`确定要删除模组 ${modName} 吗？`)) {
+      try {
+        await invoke('delete_mod', { instanceId: manageInstance.id, modName });
+        fetchMods(manageInstance.id);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const handleOpenFolder = async () => {
+    if (!manageInstance) return;
+    try {
+      await invoke('open_instance_folder', { instanceId: manageInstance.id });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -290,7 +352,7 @@ const Instances = () => {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '8px' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <Button appearance="transparent" icon={<SettingsIcon size={18} color="rgba(255,255,255,0.7)" />} />
+                  <Button appearance="transparent" icon={<SettingsIcon size={18} color="rgba(255,255,255,0.7)" />} onClick={() => handleOpenManage(inst)} />
                   <Button appearance="transparent" icon={<Trash2 size={18} color="#ff6b6b" />} onClick={() => handleDelete(inst.id)} disabled={launchStatus !== 'idle' && activeInstanceId === inst.id} />
                 </div>
                 <Button 
@@ -340,6 +402,56 @@ const Instances = () => {
       )}
 
       {/* Removed the global real-time log terminal completely */}
+
+      <Dialog open={manageDialogOpen} onOpenChange={(_e, data) => setManageDialogOpen(data.open)}>
+        <DialogSurface style={{ backgroundColor: '#2B2B2B', border: '1px solid rgba(255,255,255,0.1)', maxWidth: '600px' }}>
+          <DialogBody>
+            <DialogTitle style={{ color: 'white' }}>实例管理: {manageInstance?.name}</DialogTitle>
+            <DialogContent>
+              <div style={{ padding: '16px 0', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <Text weight="semibold" style={{ color: 'white' }}>游戏版本: {manageInstance?.mc_version}</Text>
+                    <Text style={{ color: '#aaa', display: 'block' }}>加载器: {manageInstance?.loader}</Text>
+                  </div>
+                  <Button appearance="secondary" icon={<FolderOpen size={16} />} onClick={handleOpenFolder}>
+                    打开文件夹
+                  </Button>
+                </div>
+                
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <Text weight="semibold" style={{ color: 'white' }}>已安装模组 ({localMods.length})</Text>
+                  </div>
+                  
+                  {modsLoading ? (
+                    <Spinner size="tiny" />
+                  ) : localMods.length === 0 ? (
+                    <Text style={{ color: '#aaa' }}>没有安装任何模组。</Text>
+                  ) : (
+                    <div style={{ maxHeight: '300px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {localMods.map((mod) => (
+                        <div key={mod.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <Switch checked={mod.enabled} onChange={(_e, data) => handleToggleMod(mod, data.checked)} />
+                            <Text style={{ color: mod.enabled ? 'white' : 'gray', textDecoration: mod.enabled ? 'none' : 'line-through' }}>{mod.name}</Text>
+                          </div>
+                          <Button appearance="transparent" icon={<Trash2 size={16} color="#ff6b6b" />} onClick={() => handleDeleteMod(mod.name)} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+            <DialogActions>
+              <DialogTrigger disableButtonEnhancement>
+                <Button appearance="secondary">关闭</Button>
+              </DialogTrigger>
+            </DialogActions>
+          </DialogBody>
+        </DialogSurface>
+      </Dialog>
     </div>
   );
 };
