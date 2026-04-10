@@ -1,5 +1,6 @@
 pub mod assets_manager;
 pub mod auth;
+pub mod msa;
 pub mod config;
 pub mod download_manager;
 pub mod downloader;

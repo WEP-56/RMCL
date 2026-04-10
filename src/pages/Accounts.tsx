@@ -15,7 +15,7 @@ import {
   DialogActions,
   DialogContent
 } from '@fluentui/react-components';
-import { User, UserPlus, Trash2 } from 'lucide-react';
+import { User, UserPlus, Trash2, Github } from 'lucide-react'; // We use Github icon as placeholder for MS if no Windows icon, but let's just use Box or UserPlus
 
 interface Account {
   uuid: string;
@@ -27,7 +27,11 @@ const Accounts = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [newUsername, setNewUsername] = useState('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isOfflineDialogOpen, setIsOfflineDialogOpen] = useState(false);
+  const [isMsaDialogOpen, setIsMsaDialogOpen] = useState(false);
+  const [msaCode, setMsaCode] = useState('');
+  const [msaUrl, setMsaUrl] = useState('');
+  const [msaPolling, setMsaPolling] = useState(false);
 
   const fetchAccounts = async () => {
     try {
@@ -51,10 +55,38 @@ const Accounts = () => {
     try {
       await invoke('add_offline_account', { username: newUsername });
       setNewUsername('');
-      setIsDialogOpen(false);
+      setIsOfflineDialogOpen(false);
       fetchAccounts();
     } catch (e) {
       console.error('Failed to add account:', e);
+    }
+  };
+
+  const handleStartMsaLogin = async () => {
+    try {
+      setIsMsaDialogOpen(true);
+      setMsaPolling(true);
+      setMsaCode('获取中...');
+      
+      const res = await invoke<{ user_code: string, device_code: string, verification_uri: string, interval: number }>('start_msa_login');
+      setMsaCode(res.user_code);
+      setMsaUrl(res.verification_uri);
+      
+      // poll
+      try {
+        await invoke('poll_msa_token', { deviceCode: res.device_code, interval: res.interval });
+        setIsMsaDialogOpen(false);
+        fetchAccounts();
+      } catch (err) {
+        console.error("MSA Poll error", err);
+        setMsaCode('登录失败或超时');
+      }
+      
+    } catch (e) {
+      console.error(e);
+      setMsaCode('无法连接到微软服务器');
+    } finally {
+      setMsaPolling(false);
     }
   };
 
@@ -63,35 +95,79 @@ const Accounts = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ margin: 0, fontSize: '28px', fontWeight: 600 }}>账号管理</h1>
         
-        <Dialog open={isDialogOpen} onOpenChange={(_e, data) => setIsDialogOpen(data.open)}>
-          <DialogTrigger disableButtonEnhancement>
-            <Button appearance="primary" icon={<UserPlus size={16} />}>添加账号</Button>
-          </DialogTrigger>
-          <DialogSurface>
-            <DialogBody>
-              <DialogTitle>添加离线账号</DialogTitle>
-              <DialogContent>
-                <div style={{ padding: '16px 0' }}>
-                  <Input 
-                    placeholder="输入游戏内玩家名称" 
-                    value={newUsername}
-                    onChange={(_e, data) => setNewUsername(data.value)}
-                    style={{ width: '100%' }}
-                  />
-                  <Text size={200} style={{ color: 'gray', marginTop: '8px', display: 'block' }}>
-                    离线账号仅用于单机模式或支持离线验证的第三方服务器。
-                  </Text>
-                </div>
-              </DialogContent>
-              <DialogActions>
-                <DialogTrigger disableButtonEnhancement>
-                  <Button appearance="secondary">取消</Button>
-                </DialogTrigger>
-                <Button appearance="primary" onClick={handleAddOfflineAccount}>确认添加</Button>
-              </DialogActions>
-            </DialogBody>
-          </DialogSurface>
-        </Dialog>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <Button appearance="primary" style={{ backgroundColor: '#107c10', color: 'white' }} onClick={handleStartMsaLogin}>微软登录</Button>
+
+          <Dialog open={isOfflineDialogOpen} onOpenChange={(_e, data) => setIsOfflineDialogOpen(data.open)}>
+            <DialogTrigger disableButtonEnhancement>
+              <Button appearance="secondary" icon={<UserPlus size={16} />}>离线账号</Button>
+            </DialogTrigger>
+            <DialogSurface>
+              <DialogBody>
+                <DialogTitle>添加离线账号</DialogTitle>
+                <DialogContent>
+                  <div style={{ padding: '16px 0' }}>
+                    <Input 
+                      placeholder="输入游戏内玩家名称" 
+                      value={newUsername}
+                      onChange={(_e, data) => setNewUsername(data.value)}
+                      style={{ width: '100%' }}
+                    />
+                    <Text size={200} style={{ color: 'gray', marginTop: '8px', display: 'block' }}>
+                      离线账号仅用于单机模式或支持离线验证的第三方服务器。
+                    </Text>
+                  </div>
+                </DialogContent>
+                <DialogActions>
+                  <DialogTrigger disableButtonEnhancement>
+                    <Button appearance="secondary">取消</Button>
+                  </DialogTrigger>
+                  <Button appearance="primary" onClick={handleAddOfflineAccount}>确认添加</Button>
+                </DialogActions>
+              </DialogBody>
+            </DialogSurface>
+          </Dialog>
+
+          <Dialog open={isMsaDialogOpen} onOpenChange={(_e, data) => { if (!msaPolling) setIsMsaDialogOpen(data.open); }}>
+            <DialogSurface>
+              <DialogBody>
+                <DialogTitle>微软账号登录</DialogTitle>
+                <DialogContent>
+                  <div style={{ padding: '16px 0', textAlign: 'center' }}>
+                    <Text size={400} style={{ display: 'block', marginBottom: '16px' }}>
+                      请在浏览器中打开以下链接，并输入代码进行授权：
+                    </Text>
+                    {msaUrl && (
+                      <a href={msaUrl} target="_blank" rel="noreferrer" style={{ color: '#60CDFF', textDecoration: 'underline', marginBottom: '16px', display: 'block' }}>
+                        {msaUrl}
+                      </a>
+                    )}
+                    <div style={{ 
+                      fontSize: '32px', 
+                      letterSpacing: '4px', 
+                      fontWeight: 'bold', 
+                      padding: '16px', 
+                      backgroundColor: 'rgba(0,0,0,0.2)', 
+                      borderRadius: '8px',
+                      userSelect: 'all'
+                    }}>
+                      {msaCode}
+                    </div>
+                    {msaPolling && (
+                      <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                        <Spinner size="small" />
+                        <Text>正在等待授权...</Text>
+                      </div>
+                    )}
+                  </div>
+                </DialogContent>
+                <DialogActions>
+                  <Button appearance="secondary" onClick={() => setIsMsaDialogOpen(false)} disabled={msaPolling}>关闭</Button>
+                </DialogActions>
+              </DialogBody>
+            </DialogSurface>
+          </Dialog>
+        </div>
       </div>
 
       {loading ? (

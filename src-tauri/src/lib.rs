@@ -11,6 +11,28 @@ use std::collections::HashMap;
 use tauri::Emitter;
 
 #[tauri::command]
+async fn start_msa_login() -> Result<crate::core::msa::DeviceCodeResponse, String> {
+    crate::core::msa::start_device_code_flow().await
+}
+
+#[tauri::command]
+async fn poll_msa_token(device_code: String, interval: u64) -> Result<Account, String> {
+    let account = crate::core::msa::poll_msa_token(device_code, interval).await?;
+    let mut accounts = core::config::load_accounts().unwrap_or_else(|_| vec![]);
+
+    // Check if account already exists
+    if let Some(existing) = accounts.iter_mut().find(|a| a.uuid == account.uuid) {
+        *existing = account.clone();
+    } else {
+        accounts.push(account.clone());
+    }
+    
+    let _ = core::config::save_accounts(&accounts);
+
+    Ok(account)
+}
+
+#[tauri::command]
 async fn search_modrinth(query: String, project_type: Option<String>, limit: u32, offset: u32) -> Result<SearchResult, String> {
     core::modrinth_api::search_projects(&query, None, None, project_type.as_deref(), limit, offset)
         .await
@@ -316,7 +338,9 @@ pub fn run() {
       install_modpack,
       get_java_download_url,
       get_settings,
-      save_settings
+      save_settings,
+      start_msa_login,
+      poll_msa_token
     ])
     .setup(|app| {
             app.handle().plugin(tauri_plugin_dialog::init())?;
