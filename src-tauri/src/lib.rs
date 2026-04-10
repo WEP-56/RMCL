@@ -237,6 +237,9 @@ async fn launch_minecraft(
     placeholders.insert("auth_uuid", core::auth::generate_offline_uuid(&username));
     placeholders.insert("auth_access_token", "null".to_string());
     placeholders.insert("user_type", "mojang".to_string()); // or msa
+    placeholders.insert("clientid", "null".to_string());
+    placeholders.insert("auth_xuid", "null".to_string());
+    placeholders.insert("user_properties", "{}".to_string());
     placeholders.insert("version_type", meta.version_type.clone());
     placeholders.insert("resolution_width", "854".to_string());
     placeholders.insert("resolution_height", "480".to_string());
@@ -268,7 +271,7 @@ async fn launch_minecraft(
     let mut active_features = HashMap::new();
     active_features.insert("is_demo_user".to_string(), false);
     active_features.insert("has_custom_resolution".to_string(), true);
-    active_features.insert("has_quick_plays_support".to_string(), true);
+    active_features.insert("has_quick_plays_support".to_string(), false);
 
     // For modern versions
     if let Some(args) = &meta.arguments {
@@ -444,10 +447,8 @@ pub fn run() {
 
             #[cfg(target_os = "windows")]
             {
-                // 尝试应用 Mica（仅 Win11），如果失败则回退到 Acrylic
-                if apply_mica(&window, Some(true)).is_err() {
-                    let _ = apply_acrylic(&window, Some((18, 18, 18, 125)));
-                }
+                // 尝试应用 Mica（仅 Win11），如果失败则不使用 Acrylic 以防止部分 Win10 机器白屏
+                let _ = apply_mica(&window, Some(true));
             }
 
             Ok(())
