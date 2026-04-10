@@ -210,6 +210,9 @@ async fn launch_minecraft(
         text: "生成 Classpath".to_string(),
     });
     let classpath = core::launcher::build_classpath(&meta);
+    
+    // Log classpath length to terminal to help debug issues
+    println!("[INFO] Classpath generated with length: {}", classpath.len());
 
     // 6. Build Placeholders
     let mut placeholders = HashMap::new();
@@ -245,9 +248,14 @@ async fn launch_minecraft(
     final_args.push("-XX:G1HeapRegionSize=32M".to_string());
     final_args.push(format!("-Djava.library.path={}", natives_dir.to_string_lossy()));
 
+    // For modern versions
     if let Some(args) = &meta.arguments {
         if let Some(jvm_args) = &args.jvm {
             final_args.extend(core::launcher::parse_arguments(jvm_args, &placeholders));
+        } else {
+            // Some versions have `arguments` but no `jvm` object, so we must manually add the classpath
+            final_args.push("-cp".to_string());
+            final_args.push(classpath.clone());
         }
         
         final_args.push(meta.main_class.clone());
@@ -257,6 +265,9 @@ async fn launch_minecraft(
         }
     } else {
         // Fallback for old versions (1.12.2 and older)
+        final_args.push("-cp".to_string());
+        final_args.push(classpath.clone());
+        
         final_args.push(meta.main_class.clone());
         if let Some(mc_args) = &meta.minecraft_arguments {
             let parsed_old = mc_args.split_whitespace().map(|s| core::launcher::replace_placeholders(s, &placeholders)).collect::<Vec<String>>();

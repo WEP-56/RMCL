@@ -133,10 +133,13 @@ pub async fn download_files(
                                     return Err(anyhow::anyhow!("Failed to write file {:?}: {}", task.path, e));
                                 }
                                 // Check sha1 if needed after download
-                                if !check_file_validity(&task.path, &task.sha1) {
-                                    attempts += 1;
-                                    last_err = "SHA1 mismatch".to_string();
-                                    continue;
+                                if let Some(expected_sha1) = &task.sha1 {
+                                    if !check_file_validity(&task.path, &Some(expected_sha1.clone())) {
+                                        attempts += 1;
+                                        last_err = format!("SHA1 mismatch for {}. Expected: {}", task.path.display(), expected_sha1);
+                                        let _ = fs::remove_file(&task.path); // delete invalid file
+                                        continue;
+                                    }
                                 }
                                 break; // Success
                             } else {

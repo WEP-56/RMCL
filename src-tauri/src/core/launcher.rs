@@ -36,7 +36,18 @@ pub fn build_classpath(meta: &VersionMeta) -> String {
     #[cfg(not(target_os = "windows"))]
     let separator = ":";
 
-    cp.join(separator)
+    // Deduplicate classpath entries
+    let mut unique_cp = Vec::new();
+    for p in cp {
+        if !unique_cp.contains(&p) {
+            unique_cp.push(p);
+        }
+    }
+
+    // On Windows, the classpath might get extremely long and exceed the maximum command line length limit (8191 chars)
+    // To solve this properly, we could write the classpath to a temporary args file and pass @args.txt to java.
+    // For now, this implementation should work for most modpacks.
+    unique_cp.join(separator)
 }
 
 pub fn replace_placeholders(arg: &str, placeholders: &HashMap<&str, String>) -> String {

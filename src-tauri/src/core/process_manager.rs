@@ -9,6 +9,10 @@ pub async fn spawn_minecraft(
     args: Vec<String>,
     working_dir: &str,
 ) -> Result<(), anyhow::Error> {
+    let _ = app_handle.emit("mc-log", format!("[INFO] Launching Java from: {}", java_path));
+    let _ = app_handle.emit("mc-log", format!("[INFO] Working Directory: {}", working_dir));
+    let _ = app_handle.emit("mc-log", format!("[INFO] Arguments: {:?}", args));
+
     let mut child = Command::new(java_path)
         .args(args)
         .current_dir(working_dir)
@@ -23,7 +27,8 @@ pub async fn spawn_minecraft(
     tokio::spawn(async move {
         let mut reader = BufReader::new(stdout).lines();
         while let Ok(Some(line)) = reader.next_line().await {
-            let _ = app_clone1.emit("mc-log", line);
+            let _ = app_clone1.emit("mc-log", line.clone());
+            println!("[MC-STDOUT] {}", line);
         }
     });
 
@@ -32,6 +37,7 @@ pub async fn spawn_minecraft(
         let mut reader = BufReader::new(stderr).lines();
         while let Ok(Some(line)) = reader.next_line().await {
             let _ = app_clone2.emit("mc-log", format!("[ERROR] {}", line));
+            println!("[MC-STDERR] {}", line);
         }
     });
 
