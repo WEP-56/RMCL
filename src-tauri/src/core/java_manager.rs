@@ -3,7 +3,7 @@ use std::env::consts;
 use std::process::Command;
 use std::path::PathBuf;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use serde::{Serialize, Deserialize};
 use tauri::Emitter;
 
@@ -115,14 +115,13 @@ pub fn find_java_by_major_version(major_version: u32) -> Option<String> {
         let parts: Vec<&str> = java.version.split(|c| c == '.' || c == '_' || c == '-').collect();
         if parts.is_empty() { continue; }
         
-        let mut parsed_major = 0;
-        if parts[0] == "1" && parts.len() > 1 {
+        let parsed_major = if parts[0] == "1" && parts.len() > 1 {
             // 1.8.0 -> 8
-            parsed_major = parts[1].parse::<u32>().unwrap_or(0);
+            parts[1].parse::<u32>().unwrap_or(0)
         } else {
             // 17.0.1 -> 17
-            parsed_major = parts[0].parse::<u32>().unwrap_or(0);
-        }
+            parts[0].parse::<u32>().unwrap_or(0)
+        };
 
         if parsed_major == major_version {
             return Some(java.path);
@@ -191,7 +190,7 @@ pub async fn download_and_extract_java(
         text: "正在下载 JRE".to_string(),
     });
 
-    let java_dir = crate::core::paths::get_instances_dir().parent().unwrap().join("java");
+    let java_dir = crate::core::config::get_instances_dir().parent().unwrap().join("java");
     if !java_dir.exists() {
         fs::create_dir_all(&java_dir)?;
     }

@@ -412,7 +412,7 @@ async fn get_minecraft_versions() -> Result<crate::core::minecraft::VersionManif
     core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())
 }
 
-use window_vibrancy::{apply_mica, apply_acrylic};
+use window_vibrancy::apply_mica;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
