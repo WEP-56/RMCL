@@ -1,6 +1,101 @@
 use reqwest::Client;
 use std::env::consts;
 use std::process::Command;
+use serde::{Serialize, Deserialize};
+use std::path::PathBuf;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JavaInstallation {
+    pub name: String,
+    pub path: String,
+    pub version: String,
+}
+
+pub fn get_java_version_from_path(path: &str) -> Option<String> {
+    let output = Command::new(path).arg("-version").output().ok()?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Some java distributions print to stdout, most to stderr
+    let output_str = if !stderr.trim().is_empty() { stderr } else { stdout };
+    
+    // Look for a line containing "version"
+    for line in output_str.lines() {
+        if line.contains("version") {
+            // Extract text between quotes
+            if let Some(start) = line.find('"') {
+                if let Some(end) = line[start + 1..].find('"') {
+                    return Some(line[start + 1..start + 1 + end].to_string());
+                }
+            }
+            // Fallback if no quotes
+            return Some(line.to_string());
+        }
+    }
+    None
+}
+
+pub fn scan_java_installations() -> Vec<JavaInstallation> {
+    let mut installations = Vec::new();
+    
+    // Try system 'java'
+    if let Some(version) = get_java_version_from_path("java") {
+        installations.push(JavaInstallation {
+            name: "System Default".to_string(),
+            path: "java".to_string(),
+            version,
+        });
+    }
+
+    let mut search_paths = Vec::new();
+
+    if consts::OS == "windows" {
+        search_paths.extend(vec![
+            "C:\\Program Files\\Java",
+            "C:\\Program Files (x86)\\Java",
+            "C:\\Program Files\\Eclipse Adoptium",
+            "C:\\Program Files\\AdoptOpenJDK",
+        ]);
+    } else if consts::OS == "linux" {
+        search_paths.extend(vec![
+            "/usr/lib/jvm",
+            "/usr/java",
+        ]);
+    } else if consts::OS == "macos" {
+        search_paths.extend(vec![
+            "/Library/Java/JavaVirtualMachines",
+        ]);
+    }
+
+    for base in search_paths {
+        if let Ok(entries) = std::fs::read_dir(base) {
+            for entry in entries.flatten() {
+                let mut exe_path = entry.path();
+                exe_path.push("bin");
+                
+                let exe_name = if consts::OS == "windows" { "javaw.exe" } else { "java" };
+                exe_path.push(exe_name);
+                
+                if exe_path.exists() {
+                    let path_str = exe_path.to_string_lossy().to_string();
+                    if let Some(version) = get_java_version_from_path(&path_str) {
+                        let name = entry.file_name().to_string_lossy().to_string();
+                        // Avoid duplicates
+                        if !installations.iter().any(|i| i.path == path_str || (i.path == "java" && i.version == version)) {
+                            installations.push(JavaInstallation {
+                                name,
+                                path: path_str,
+                                version,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    installations
+}
 
 pub fn find_system_java() -> String {
     // Try to execute `java -version` and if it works, return "java"

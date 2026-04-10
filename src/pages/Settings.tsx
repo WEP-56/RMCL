@@ -14,14 +14,27 @@ import {
   useToastController,
   useId,
   Slider,
-  Label
+  Label,
+  Dialog,
+  DialogTrigger,
+  DialogSurface,
+  DialogTitle,
+  DialogBody,
+  DialogActions,
+  DialogContent,
 } from '@fluentui/react-components';
-import { Folder, Coffee, Save, RotateCcw, Cpu } from 'lucide-react';
+import { Folder, Coffee, Save, RotateCcw, Cpu, Search } from 'lucide-react';
 
 interface AppSettings {
   javaPath: string;
   maxMemory: number;
   gameDirectory: string | null;
+}
+
+interface JavaInstallation {
+  name: string;
+  path: string;
+  version: string;
 }
 
 const Settings = () => {
@@ -32,6 +45,9 @@ const Settings = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [javaDialog, setJavaDialog] = useState(false);
+  const [javas, setJavas] = useState<JavaInstallation[]>([]);
+  const [javasLoading, setJavasLoading] = useState(false);
   
   const toasterId = useId('toaster');
   const { dispatchToast } = useToastController(toasterId);
@@ -106,6 +122,18 @@ const Settings = () => {
       }
     } catch (e) {
       console.error('Failed to open dialog', e);
+    }
+  };
+
+  const scanJavas = async () => {
+    try {
+      setJavasLoading(true);
+      const res = await invoke<JavaInstallation[]>('scan_java_installations');
+      setJavas(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setJavasLoading(false);
     }
   };
 
@@ -188,6 +216,47 @@ const Settings = () => {
               placeholder="例如：C:\Program Files\Java\jdk-17\bin\javaw.exe 或 java" 
               style={{ flex: 1 }}
             />
+            
+            <Dialog open={javaDialog} onOpenChange={(_e, data) => { setJavaDialog(data.open); if(data.open) scanJavas(); }}>
+              <DialogTrigger disableButtonEnhancement>
+                <Button appearance="secondary" icon={<Search size={16} />}>自动探测</Button>
+              </DialogTrigger>
+              <DialogSurface>
+                <DialogBody>
+                  <DialogTitle>选择 Java 版本</DialogTitle>
+                  <DialogContent>
+                    {javasLoading ? (
+                      <div style={{ padding: '24px', textAlign: 'center' }}>
+                        <Spinner label="正在扫描本地 Java 安装..." />
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px', maxHeight: '300px', overflowY: 'auto' }}>
+                        {javas.length === 0 ? (
+                          <Text>未发现安装的 Java 环境。</Text>
+                        ) : (
+                          javas.map((j, i) => (
+                            <Card key={i} style={{ padding: '8px', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.05)' }} onClick={() => {
+                              setSettings({ ...settings, javaPath: j.path });
+                              setJavaDialog(false);
+                            }}>
+                              <Text weight="semibold">{j.name}</Text>
+                              <Text size={200} style={{ color: '#60CDFF' }}>版本: {j.version}</Text>
+                              <Text size={100} style={{ color: 'gray', wordBreak: 'break-all' }}>{j.path}</Text>
+                            </Card>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </DialogContent>
+                  <DialogActions>
+                    <DialogTrigger disableButtonEnhancement>
+                      <Button appearance="secondary">关闭</Button>
+                    </DialogTrigger>
+                  </DialogActions>
+                </DialogBody>
+              </DialogSurface>
+            </Dialog>
+
             <Button appearance="secondary" onClick={handleSelectJavaPath}>浏览...</Button>
             <Button appearance="transparent" icon={<RotateCcw size={16} />} onClick={resetJavaPath} title="恢复默认 (自动探测)" />
           </div>

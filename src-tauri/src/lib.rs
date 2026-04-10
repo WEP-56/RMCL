@@ -10,6 +10,13 @@ use std::collections::HashMap;
 
 use tauri::Emitter;
 
+use crate::core::java_manager::JavaInstallation;
+
+#[tauri::command]
+fn scan_java_installations() -> Result<Vec<JavaInstallation>, String> {
+    Ok(crate::core::java_manager::scan_java_installations())
+}
+
 #[tauri::command]
 async fn start_msa_login() -> Result<crate::core::msa::DeviceCodeResponse, String> {
     crate::core::msa::start_device_code_flow().await
@@ -337,6 +344,7 @@ pub fn run() {
       install_mod,
       install_modpack,
       get_java_download_url,
+      scan_java_installations,
       get_settings,
       save_settings,
       start_msa_login,
