@@ -24,7 +24,7 @@ pub async fn fetch_version_meta(version_id: &str, url: &str) -> Result<VersionMe
     let client = Client::new();
     
     // Apply BMCLAPI mirror fallback if the URL is from mojang
-    let mut final_url = url.to_string();
+    let final_url = url.to_string();
     if url.contains("piston-meta.mojang.com") || url.contains("launchermeta.mojang.com") {
         let bmcl_url = url.replace("piston-meta.mojang.com", "bmclapi2.bangbang93.com")
                           .replace("launchermeta.mojang.com", "bmclapi2.bangbang93.com");

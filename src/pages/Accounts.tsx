@@ -15,7 +15,7 @@ import {
   DialogActions,
   DialogContent
 } from '@fluentui/react-components';
-import { User, UserPlus, Trash2, Github } from 'lucide-react'; // We use Github icon as placeholder for MS if no Windows icon, but let's just use Box or UserPlus
+import { User, UserPlus, Trash2 } from 'lucide-react'; // We use Github icon as placeholder for MS if no Windows icon, but let's just use Box or UserPlus
 
 interface Account {
   uuid: string;

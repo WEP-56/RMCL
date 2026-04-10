@@ -2,7 +2,6 @@ use reqwest::Client;
 use std::env::consts;
 use std::process::Command;
 use serde::{Serialize, Deserialize};
-use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JavaInstallation {

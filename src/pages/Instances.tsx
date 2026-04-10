@@ -32,7 +32,7 @@ interface Instance {
 interface LocalMod {
   name: string;
   path: string;
-  enabled: bool;
+  enabled: boolean;
 }
 
 interface Account {

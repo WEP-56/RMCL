@@ -20,10 +20,12 @@ pub struct DeviceCodeResponse {
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
+    #[allow(dead_code)]
     refresh_token: Option<String>,
 }
 
 #[derive(Serialize)]
+#[allow(non_snake_case)]
 struct XblAuthRequest {
     Properties: XblProperties,
     RelyingParty: String,
@@ -31,6 +33,7 @@ struct XblAuthRequest {
 }
 
 #[derive(Serialize)]
+#[allow(non_snake_case)]
 struct XblProperties {
     AuthMethod: String,
     SiteName: String,
@@ -38,6 +41,7 @@ struct XblProperties {
 }
 
 #[derive(Deserialize)]
+#[allow(non_snake_case)]
 struct XblResponse {
     Token: String,
     DisplayClaims: XblDisplayClaims,
@@ -54,6 +58,7 @@ struct XblXui {
 }
 
 #[derive(Serialize)]
+#[allow(non_snake_case)]
 struct XstsAuthRequest {
     Properties: XstsProperties,
     RelyingParty: String,
@@ -61,17 +66,20 @@ struct XstsAuthRequest {
 }
 
 #[derive(Serialize)]
+#[allow(non_snake_case)]
 struct XstsProperties {
     SandboxId: String,
     UserTokens: Vec<String>,
 }
 
 #[derive(Deserialize)]
+#[allow(non_snake_case)]
 struct XstsResponse {
     Token: String,
 }
 
 #[derive(Serialize)]
+#[allow(non_snake_case)]
 struct McAuthRequest {
     identityToken: String,
 }
@@ -107,7 +115,7 @@ pub async fn poll_msa_token(device_code: String, interval: u64) -> Result<Accoun
     let client = Client::new();
     
     // Poll for OAuth token
-    let mut oauth_token = String::new();
+    let oauth_token;
     loop {
         let res = client
             .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
