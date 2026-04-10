@@ -240,6 +240,10 @@ async fn launch_minecraft(
 
     // Add memory and Natives
     final_args.push(format!("-Xmx{}M", max_memory));
+    
+    #[cfg(target_os = "macos")]
+    final_args.push("-XstartOnFirstThread".to_string());
+    
     final_args.push("-XX:+UnlockExperimentalVMOptions".to_string());
     final_args.push("-XX:+UseG1GC".to_string());
     final_args.push("-XX:G1NewSizePercent=20".to_string());
@@ -251,7 +255,13 @@ async fn launch_minecraft(
     // For modern versions
     if let Some(args) = &meta.arguments {
         if let Some(jvm_args) = &args.jvm {
-            final_args.extend(core::launcher::parse_arguments(jvm_args, &placeholders));
+            let parsed_jvm_args = core::launcher::parse_arguments(jvm_args, &placeholders);
+            
+            // Strip out `-XstartOnFirstThread` from json arguments if not on macos
+            #[cfg(not(target_os = "macos"))]
+            let parsed_jvm_args: Vec<String> = parsed_jvm_args.into_iter().filter(|s| !s.contains("-XstartOnFirstThread")).collect();
+            
+            final_args.extend(parsed_jvm_args);
         } else {
             // Some versions have `arguments` but no `jvm` object, so we must manually add the classpath
             final_args.push("-cp".to_string());

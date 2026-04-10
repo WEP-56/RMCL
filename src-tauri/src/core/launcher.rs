@@ -70,9 +70,46 @@ pub fn parse_arguments(
             Argument::String(s) => {
                 result.push(replace_placeholders(s, placeholders));
             }
-            Argument::Rule { rules: _rules, value } => {
-                // TODO: Full rule evaluation. Assuming allowed for now.
-                let allowed = true; 
+            Argument::Rule { rules, value } => {
+                // If no rules match anything, default behavior is usually allow unless it's explicitly disallowed
+                let mut allowed = if rules.is_empty() { true } else { false };
+                let mut has_os_rule = false;
+                
+                // Extremely basic rule evaluation for OS compatibility
+                for rule in rules {
+                    let mut is_match = false;
+                    let mut condition_evaluated = false;
+
+                    if let Some(os) = &rule.os {
+                        has_os_rule = true;
+                        condition_evaluated = true;
+                        if let Some(name) = &os.name {
+                            #[cfg(target_os = "windows")]
+                            { is_match = name == "windows"; }
+                            
+                            #[cfg(target_os = "macos")]
+                            { is_match = name == "osx"; }
+                            
+                            #[cfg(target_os = "linux")]
+                            { is_match = name == "linux"; }
+                        } else {
+                            is_match = true;
+                        }
+                    }
+
+                    if !condition_evaluated {
+                        // e.g. features like is_demo_user, has_custom_resolution which we mostly assume true for now
+                        is_match = true;
+                    }
+
+                    if is_match {
+                        if rule.action == "allow" {
+                            allowed = true;
+                        } else if rule.action == "disallow" {
+                            allowed = false;
+                        }
+                    }
+                }
                 
                 if allowed {
                     match value {
