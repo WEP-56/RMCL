@@ -18,29 +18,25 @@ pub async fn spawn_minecraft(
     println!("[INFO] Arguments length: {}", args.len());
 
     let mut child = Command::new(java_path)
-        .args(args)
+        .args(&args)
         .current_dir(working_dir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()?;
 
-    sleep(Duration::from_millis(200)).await;
+    // Don't wait for javaw.exe if it exits immediately. Actually javaw.exe detaches its streams
+    // and returns immediately or closes pipes on windows. Wait, we should use java.exe instead of javaw.exe.
+    
+    // We will wait briefly to see if it crashed
+    sleep(Duration::from_millis(500)).await;
     if let Some(status) = child.try_wait()? {
-        let output = child.wait_with_output().await?;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        // If it exited within 500ms, it's definitely a crash
         let code = status.code().unwrap_or(-1);
         let _ = app_handle.emit("mc-exit", code);
-        if !stdout.is_empty() {
-            println!("[MC-STDOUT] {}", stdout);
-        }
-        if !stderr.is_empty() {
-            println!("[MC-STDERR] {}", stderr);
-        }
+        
         return Err(anyhow::anyhow!(
-            "Minecraft exited immediately (code {}). stderr: {}",
-            code,
-            stderr
+            "Minecraft exited immediately (code {}). Please check if your java path is correct.",
+            code
         ));
     }
 

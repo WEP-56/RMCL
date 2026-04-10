@@ -169,6 +169,7 @@ async fn launch_minecraft(
                 if let Some(mut fabric_args) = fabric_meta.arguments {
                     if let Some(ref mut v_game) = vanilla_args.game {
                         if let Some(mut f_game) = fabric_args.game.take() {
+                            // vanilla game args usually go first
                             v_game.append(&mut f_game);
                         }
                     } else {
@@ -176,7 +177,9 @@ async fn launch_minecraft(
                     }
                     if let Some(ref mut v_jvm) = vanilla_args.jvm {
                         if let Some(mut f_jvm) = fabric_args.jvm.take() {
-                            v_jvm.append(&mut f_jvm);
+                            // Fabric JVM args MUST go before vanilla JVM args to set the correct main class
+                            f_jvm.append(v_jvm);
+                            vanilla_args.jvm = Some(f_jvm);
                         }
                     } else {
                         vanilla_args.jvm = fabric_args.jvm.take();

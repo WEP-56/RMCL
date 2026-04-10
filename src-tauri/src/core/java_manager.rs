@@ -72,7 +72,7 @@ pub fn scan_java_installations() -> Vec<JavaInstallation> {
                 let mut exe_path = entry.path();
                 exe_path.push("bin");
                 
-                let exe_name = if consts::OS == "windows" { "javaw.exe" } else { "java" };
+                let exe_name = if consts::OS == "windows" { "java.exe" } else { "java" };
                 exe_path.push(exe_name);
                 
                 if exe_path.exists() {

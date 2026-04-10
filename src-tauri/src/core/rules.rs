@@ -12,8 +12,10 @@ pub fn evaluate_rules(rules: &[Rule], active_features: &HashMap<String, bool>) -
     for rule in rules {
         let mut match_os = true;
         let mut match_features = true;
+        let mut has_conditions = false;
 
         if let Some(os) = &rule.os {
+            has_conditions = true;
             if let Some(name) = &os.name {
                 #[cfg(target_os = "windows")]
                 { match_os &= name == "windows"; }
@@ -34,6 +36,7 @@ pub fn evaluate_rules(rules: &[Rule], active_features: &HashMap<String, bool>) -
         }
 
         if let Some(req_features) = &rule.features {
+            has_conditions = true;
             for (feature_name, required_val) in req_features {
                 let actual_val = active_features.get(feature_name).copied().unwrap_or(false);
                 if actual_val != *required_val {
@@ -43,7 +46,15 @@ pub fn evaluate_rules(rules: &[Rule], active_features: &HashMap<String, bool>) -
             }
         }
 
-        if match_os && match_features {
+        // If rule has no conditions (no `os`, no `features`), it's a global rule
+        if !has_conditions {
+            has_matched_rule = true;
+            if rule.action == "allow" {
+                result = true;
+            } else if rule.action == "disallow" {
+                result = false;
+            }
+        } else if match_os && match_features {
             has_matched_rule = true;
             if rule.action == "allow" {
                 result = true;
