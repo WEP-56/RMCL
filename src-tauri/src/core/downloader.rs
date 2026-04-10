@@ -59,28 +59,47 @@ pub async fn download_files(
         let instance_id_clone = instance_id.to_string();
 
         tokio::spawn(async move {
-            let _skip = false;
-            if check_file_validity(&task.path, &task.sha1) {
-                // _skip = true;
-            } else {
-                if let Some(parent) = task.path.parent() {
-                    let _ = fs::create_dir_all(parent);
-                }
+            // First check if the URL ends with a colon, which might be a bug in upstream or parsing
+            let mut final_url = task.url.clone();
+            if final_url.ends_with(':') {
+                final_url.pop();
+            }
 
-                match client.get(&task.url).send().await {
-                    Ok(response) => {
-                        let status = response.status();
-                        if status.is_success() {
-                            if let Ok(bytes) = response.bytes().await {
-                                if let Err(e) = fs::write(&task.path, bytes) {
-                                    return Err(anyhow::anyhow!("Failed to write file {:?}: {}", task.path, e));
-                                }
+            if check_file_validity(&task.path, &task.sha1) {
+                // Skip if valid file exists
+                let current = completed_clone.fetch_add(1, Ordering::Relaxed) + 1;
+                if let Some(a) = &app_clone {
+                    let _ = a.emit("mc-progress", ProgressPayload {
+                        instance_id: instance_id_clone,
+                        task: task_name_clone,
+                        progress: current as f64 / total as f64,
+                        text: format!("{} / {}", current, total),
+                    });
+                }
+                return Ok(());
+            }
+
+            if let Some(parent) = task.path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+
+            match client.get(&final_url).send().await {
+                Ok(response) => {
+                    let status = response.status();
+                    if status.is_success() {
+                        if let Ok(bytes) = response.bytes().await {
+                            if let Err(e) = fs::write(&task.path, bytes) {
+                                return Err(anyhow::anyhow!("Failed to write file {:?}: {}", task.path, e));
                             }
-                        } else {
-                            return Err(anyhow::anyhow!("Failed to download {} (Status: {})", task.url, status));
                         }
+                    } else {
+                        return Err(anyhow::anyhow!("Failed to download {} (Status: {})", final_url, status));
                     }
-                    Err(e) => return Err(anyhow::anyhow!("Request error for {}: {}", task.url, e)),
+                }
+                Err(e) => {
+                    // Try with a different client or without SSL verification as fallback if needed
+                    // But for now just return the error cleanly
+                    return Err(anyhow::anyhow!("Request error for `{}`: {}", final_url, e));
                 }
             }
 

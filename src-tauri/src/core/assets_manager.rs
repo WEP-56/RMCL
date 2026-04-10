@@ -37,6 +37,13 @@ pub async fn download_assets(asset_index_url: &str, asset_index_id: &str, app: O
         
         let url = format!("https://resources.download.minecraft.net/{}/{}", prefix, hash);
         
+        // Ensure path directory exists for the download task
+        if let Some(parent) = path.parent() {
+            if !parent.exists() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+
         tasks.push(DownloadTask {
             url,
             path,
