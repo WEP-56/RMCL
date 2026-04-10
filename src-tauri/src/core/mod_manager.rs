@@ -254,7 +254,6 @@ pub fn open_instance_folder(instance_id: &str) -> Result<(), anyhow::Error> {
 pub async fn export_instance_to_modrinth(instance_id: &str, output_path: &str) -> Result<(), anyhow::Error> {
     let instance = crate::core::instance::get_instance_by_id(instance_id)?;
     let instance_dir = get_instance_dir(instance_id);
-    let mods_dir = instance_dir.join("mods");
 
     // We only support exporting basic mrpack without actual mod files for now
     // A real implementation would query Modrinth API for each mod's SHA1/SHA512 to build the index

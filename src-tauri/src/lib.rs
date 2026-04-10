@@ -230,7 +230,7 @@ async fn launch_minecraft(
     placeholders.insert("natives_directory", natives_dir.to_string_lossy().to_string());
     placeholders.insert("launcher_name", "RustMCLauncher".to_string());
     placeholders.insert("launcher_version", "0.1.0".to_string());
-    placeholders.insert("classpath", classpath);
+    placeholders.insert("classpath", classpath.clone());
 
     // 7. Parse Arguments
     let mut final_args = Vec::new();
