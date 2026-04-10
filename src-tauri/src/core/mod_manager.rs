@@ -1,11 +1,12 @@
 use crate::core::downloader::{download_files, DownloadTask};
 use crate::models::modrinth::{Version, ModpackIndex};
 use crate::models::instance::{Instance, LoaderType};
-use std::fs;
-use std::path::PathBuf;
-use std::io::Read;
+use std::fs::{self, File};
+use std::io::{Read, Write};
 use zip::ZipArchive;
+use zip::write::FileOptions;
 use serde::{Serialize, Deserialize};
+use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LocalMod {
@@ -74,7 +75,8 @@ pub async fn install_modpack(
         size: Some(target_file.size as u64),
     };
 
-    download_files(vec![task], 1, app.clone(), &uuid::Uuid::new_v4().to_string(), "下载整合包本体").await?;
+    let temp_id = uuid::Uuid::new_v4().to_string();
+    download_files(vec![task], 1, app.clone(), &temp_id, "下载整合包本体").await?;
 
     // 2. Unzip and parse the .mrpack
     let file = fs::File::open(&mrpack_path)?;
@@ -246,5 +248,64 @@ pub fn open_instance_folder(instance_id: &str) -> Result<(), anyhow::Error> {
         .arg(&path_str)
         .spawn()?;
 
+    Ok(())
+}
+
+pub async fn export_instance_to_modrinth(instance_id: &str, output_path: &str) -> Result<(), anyhow::Error> {
+    let instance = crate::core::instance::get_instance_by_id(instance_id)?;
+    let instance_dir = get_instance_dir(instance_id);
+    let mods_dir = instance_dir.join("mods");
+
+    // We only support exporting basic mrpack without actual mod files for now
+    // A real implementation would query Modrinth API for each mod's SHA1/SHA512 to build the index
+    // For simplicity in this demo, we'll just pack the mods directly into overrides
+
+    let file = File::create(output_path)?;
+    let mut zip = zip::ZipWriter::new(file);
+    let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+
+    // 1. Create a minimal index.json
+    let mut deps = std::collections::HashMap::new();
+    deps.insert("minecraft".to_string(), instance.mc_version.clone());
+    if let LoaderType::Fabric = instance.loader {
+        if let Some(loader_ver) = &instance.loader_version {
+            deps.insert("fabric-loader".to_string(), loader_ver.clone());
+        }
+    }
+
+    let index = serde_json::json!({
+        "formatVersion": 1,
+        "game": "minecraft",
+        "versionId": "1.0.0",
+        "name": instance.name,
+        "summary": "Exported by RustMC Launcher",
+        "dependencies": deps,
+        "files": [] // We pack everything into overrides for this simple implementation
+    });
+
+    zip.start_file("modrinth.index.json", options.clone())?;
+    zip.write_all(serde_json::to_string_pretty(&index)?.as_bytes())?;
+
+    // 2. Pack everything as overrides
+    let walk_dir = walkdir::WalkDir::new(&instance_dir);
+    for entry in walk_dir.into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_file() {
+            // Don't pack instance.json
+            if path.file_name() == Some(std::ffi::OsStr::new("instance.json")) {
+                continue;
+            }
+
+            let name = path.strip_prefix(&instance_dir).unwrap();
+            let name_str = name.to_string_lossy().replace("\\", "/");
+            let zip_path = format!("overrides/{}", name_str);
+            
+            zip.start_file(zip_path, options.clone())?;
+            let mut f = File::open(path)?;
+            std::io::copy(&mut f, &mut zip)?;
+        }
+    }
+
+    zip.finish()?;
     Ok(())
 }

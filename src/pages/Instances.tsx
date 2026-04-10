@@ -20,7 +20,8 @@ import {
   Label,
   Tag
 } from '@fluentui/react-components';
-import { Play, Plus, Trash2, Box, Settings as SettingsIcon, Package, Zap, FolderOpen } from 'lucide-react';
+import { Play, Plus, Trash2, Box, Settings as SettingsIcon, Package, Zap, FolderOpen, Download } from 'lucide-react';
+import { save } from '@tauri-apps/plugin-dialog';
 
 interface Instance {
   id: string;
@@ -187,6 +188,30 @@ const Instances = () => {
       await invoke('open_instance_folder', { instanceId: manageInstance.id });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!manageInstance) return;
+    try {
+      const selected = await save({
+        filters: [{
+          name: 'Modrinth Modpack',
+          extensions: ['mrpack']
+        }],
+        defaultPath: `${manageInstance.name}.mrpack`
+      });
+
+      if (selected) {
+        setCreating(true); // Reuse creating state for loading
+        await invoke('export_instance', { instanceId: manageInstance.id, outputPath: selected });
+        alert('实例已成功导出为整合包！');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('导出失败: ' + String(e));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -414,9 +439,14 @@ const Instances = () => {
                     <Text weight="semibold" style={{ color: 'white' }}>游戏版本: {manageInstance?.mc_version}</Text>
                     <Text style={{ color: '#aaa', display: 'block' }}>加载器: {manageInstance?.loader}</Text>
                   </div>
-                  <Button appearance="secondary" icon={<FolderOpen size={16} />} onClick={handleOpenFolder}>
-                    打开文件夹
-                  </Button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Button appearance="secondary" icon={<Download size={16} />} onClick={handleExport} disabled={creating}>
+                      {creating ? <Spinner size="tiny" /> : '导出 .mrpack'}
+                    </Button>
+                    <Button appearance="secondary" icon={<FolderOpen size={16} />} onClick={handleOpenFolder}>
+                      打开文件夹
+                    </Button>
+                  </div>
                 </div>
                 
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px' }}>

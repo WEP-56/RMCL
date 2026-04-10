@@ -62,6 +62,17 @@ const Accounts = () => {
     }
   };
 
+  const handleDeleteAccount = async (uuid: string) => {
+    if (confirm("确定要删除这个账号吗？")) {
+      try {
+        await invoke('delete_account', { uuid });
+        fetchAccounts();
+      } catch (e) {
+        console.error('Failed to delete account:', e);
+      }
+    }
+  };
+
   const handleStartMsaLogin = async () => {
     try {
       setIsMsaDialogOpen(true);
@@ -187,7 +198,7 @@ const Accounts = () => {
                 header={<Text weight="semibold" size={400}>{acc.username}</Text>}
                 description={<Text size={200} style={{ color: 'gray' }}>{acc.account_type === 'Offline' ? '离线模式' : '微软账号'}</Text>}
                 action={
-                  <Button appearance="transparent" icon={<Trash2 size={16} color="#ff6b6b" />} />
+                  <Button appearance="transparent" icon={<Trash2 size={16} color="#ff6b6b" />} onClick={() => handleDeleteAccount(acc.uuid)} />
                 }
               />
             </Card>

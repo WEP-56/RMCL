@@ -24,11 +24,18 @@ const LauncherContext = createContext<LauncherContextType | undefined>(undefined
 export const LauncherProvider = ({ children }: { children: ReactNode }) => {
   const [launchStatus, setLaunchStatus] = useState<LaunchStatus>('idle');
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
+  const [activeTempId, setActiveTempId] = useState<string | null>(null);
   const [progressData, setProgressData] = useState<ProgressPayload | null>(null);
 
   useEffect(() => {
     const unlistenProgress = listen<ProgressPayload>('mc-progress', (event) => {
       setProgressData(event.payload);
+      
+      // If we don't have an active instance ID but we got a progress event,
+      // it might be a modpack download. Store the ID temporarily to show progress.
+      if (!activeInstanceId && !activeTempId) {
+        setActiveTempId(event.payload.instance_id);
+      }
     });
 
     const unlistenExit = listen<number>('mc-exit', (event) => {
@@ -42,6 +49,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
       // 稍微延迟后清空状态，让用户能看到结束状态
       setTimeout(() => {
         setActiveInstanceId(null);
+        setActiveTempId(null);
         setProgressData(null);
       }, 3000);
     });
@@ -50,7 +58,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
       unlistenProgress.then((f) => f());
       unlistenExit.then((f) => f());
     };
-  }, [activeInstanceId]);
+  }, [activeInstanceId, activeTempId]);
 
   const launchInstance = async (instanceId: string, username: string, javaPath: string) => {
     if (launchStatus !== 'idle' && launchStatus !== 'error') return;
@@ -93,11 +101,12 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
   const resetLaunch = () => {
     setLaunchStatus('idle');
     setActiveInstanceId(null);
+    setActiveTempId(null);
     setProgressData(null);
   };
 
   return (
-    <LauncherContext.Provider value={{ launchStatus, activeInstanceId, progressData, launchInstance, resetLaunch }}>
+    <LauncherContext.Provider value={{ launchStatus, activeInstanceId: activeInstanceId || activeTempId, progressData, launchInstance, resetLaunch }}>
       {children}
     </LauncherContext.Provider>
   );

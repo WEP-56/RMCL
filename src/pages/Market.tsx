@@ -137,6 +137,7 @@ const Market = () => {
     try {
       if (projectType === 'modpack') {
         alert("整合包文件通常较大且包含大量前置模组，下载与解压可能需要数分钟，请耐心等待...");
+        setSelectedProject(null);
         await invoke('install_modpack', { 
           name: newModpackName, 
           version: versionData 
@@ -148,8 +149,8 @@ const Market = () => {
           version: versionData 
         });
         alert('模组安装成功！');
+        setSelectedProject(null);
       }
-      setSelectedProject(null);
     } catch (e) {
       console.error(e);
       alert('安装失败: ' + String(e));

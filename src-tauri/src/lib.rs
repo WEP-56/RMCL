@@ -15,6 +15,11 @@ use crate::core::java_manager::JavaInstallation;
 use crate::core::mod_manager::LocalMod;
 
 #[tauri::command]
+async fn export_instance(instance_id: String, output_path: String) -> Result<(), String> {
+    crate::core::mod_manager::export_instance_to_modrinth(&instance_id, &output_path).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn get_local_mods(instance_id: String) -> Result<Vec<LocalMod>, String> {
     crate::core::mod_manager::get_local_mods(&instance_id).map_err(|e| e.to_string())
 }
@@ -294,7 +299,11 @@ fn add_offline_account(username: String) -> Result<Account, String> {    let acc
 }
 
 #[tauri::command]
-fn get_accounts() -> Result<Vec<Account>, String> {
+fn delete_account(uuid: String) -> Result<(), String> {
+    let mut accounts = core::config::load_accounts().unwrap_or_else(|_| vec![]);
+    accounts.retain(|a| a.uuid != uuid);
+    core::config::save_accounts(&accounts).map_err(|e| e.to_string())
+}
     core::config::load_accounts().map_err(|e| e.to_string())
 }
 
@@ -354,6 +363,7 @@ pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
       add_offline_account,
+      delete_account,
       get_accounts,
       create_instance,
       get_instances,
@@ -369,6 +379,7 @@ pub fn run() {
       toggle_mod,
       delete_mod,
       open_instance_folder,
+      export_instance,
       get_java_download_url,
       scan_java_installations,
       get_settings,
