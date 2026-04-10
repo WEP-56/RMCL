@@ -111,21 +111,7 @@ async fn launch_minecraft(
     let instance = core::instance::get_instance_by_id(&instance_id).map_err(|e| e.to_string())?;
     let version_id = instance.mc_version.clone();
     
-    // Resolve Java path
-    let _ = app.emit("mc-log", "[INFO] 正在探测本地 Java 运行环境...");
-    let mut resolved_java_path = java_path;
-    if resolved_java_path == "java" {
-        resolved_java_path = core::java_manager::find_system_java();
-    }
-    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
-        instance_id: instance_id.clone(),
-        task: "正在获取版本清单...".to_string(),
-        progress: -1.0,
-        text: "探测完成".to_string(),
-    });
-
-    // 1. Fetch metadata dynamically based on version_id
-    let _ = app.emit("mc-log", format!("[INFO] 正在获取 Minecraft {} 版本清单...", version_id));
+    let _ = app.emit("mc-log", "[INFO] 正在获取 Minecraft 版本清单...");
     let manifest = core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())?;
     let version_info = manifest.versions.iter().find(|v| v.id == version_id)
         .ok_or_else(|| format!("Version {} not found in mojang manifest", version_id))?;
@@ -134,6 +120,31 @@ async fn launch_minecraft(
     let mut meta = core::resolver::fetch_version_meta(&version_id, url)
         .await
         .map_err(|e| e.to_string())?;
+
+    // Resolve Java path based on version requirement
+    let _ = app.emit("mc-log", "[INFO] 正在探测本地 Java 运行环境...");
+    let mut resolved_java_path = java_path;
+    if resolved_java_path == "java" {
+        if let Some(java_req) = &meta.java_version {
+            let _ = app.emit("mc-log", format!("[INFO] 游戏版本要求 Java 主版本: {}", java_req.major_version));
+            if let Some(matched_java) = core::java_manager::find_java_by_major_version(java_req.major_version) {
+                resolved_java_path = matched_java;
+                let _ = app.emit("mc-log", format!("[INFO] 匹配到合适的 Java: {}", resolved_java_path));
+            } else {
+                let _ = app.emit("mc-log", format!("[WARN] 未能找到符合要求 (Java {}) 的运行环境，将尝试使用系统默认 Java", java_req.major_version));
+                resolved_java_path = core::java_manager::find_system_java();
+            }
+        } else {
+            resolved_java_path = core::java_manager::find_system_java();
+        }
+    }
+    
+    let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
+        instance_id: instance_id.clone(),
+        task: "正在准备环境...".to_string(),
+        progress: -1.0,
+        text: "探测完成".to_string(),
+    });
 
     let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
         instance_id: instance_id.clone(),
@@ -216,9 +227,11 @@ async fn launch_minecraft(
 
     // 6. Build Placeholders
     let mut placeholders = HashMap::new();
+    let game_dir = core::instance::get_instance_game_dir(&instance_id);
+
     placeholders.insert("auth_player_name", username.clone());
     placeholders.insert("version_name", version_id.clone());
-    placeholders.insert("game_directory", core::paths::get_minecraft_dir().to_string_lossy().to_string());
+    placeholders.insert("game_directory", game_dir.to_string_lossy().to_string());
     placeholders.insert("assets_root", core::paths::get_assets_dir().to_string_lossy().to_string());
     placeholders.insert("assets_index_name", meta.asset_index.map_or("".to_string(), |a| a.id));
     placeholders.insert("auth_uuid", core::auth::generate_offline_uuid(&username));
@@ -252,10 +265,15 @@ async fn launch_minecraft(
     final_args.push("-XX:G1HeapRegionSize=32M".to_string());
     final_args.push(format!("-Djava.library.path={}", natives_dir.to_string_lossy()));
 
+    let mut active_features = HashMap::new();
+    active_features.insert("is_demo_user".to_string(), false);
+    active_features.insert("has_custom_resolution".to_string(), true);
+    active_features.insert("has_quick_plays_support".to_string(), true);
+
     // For modern versions
     if let Some(args) = &meta.arguments {
         if let Some(jvm_args) = &args.jvm {
-            let parsed_jvm_args = core::launcher::parse_arguments(jvm_args, &placeholders);
+            let parsed_jvm_args = core::launcher::parse_arguments(jvm_args, &placeholders, &active_features);
             
             // Strip out `-XstartOnFirstThread` from json arguments if not on macos
             #[cfg(not(target_os = "macos"))]
@@ -271,7 +289,7 @@ async fn launch_minecraft(
         final_args.push(meta.main_class.clone());
 
         if let Some(game_args) = &args.game {
-            final_args.extend(core::launcher::parse_arguments(game_args, &placeholders));
+            final_args.extend(core::launcher::parse_arguments(game_args, &placeholders, &active_features));
         }
     } else {
         // Fallback for old versions (1.12.2 and older)
@@ -285,7 +303,7 @@ async fn launch_minecraft(
         }
     }
 
-    let working_dir = core::paths::get_minecraft_dir().to_string_lossy().to_string();
+    let working_dir = game_dir.to_string_lossy().to_string();
 
     // 8. Spawn process
     let _ = app.emit("mc-progress", core::downloader::ProgressPayload {

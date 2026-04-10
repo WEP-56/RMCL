@@ -1,40 +1,19 @@
 use crate::core::downloader::{download_files, DownloadTask};
 use crate::core::paths;
-use crate::models::manifest::{Rule, VersionMeta};
-
-// 判断操作系统和架构，目前仅支持 Windows 简单判断，后续可扩展
-fn match_rule(rules: &Option<Vec<Rule>>) -> bool {
-    if let Some(rules) = rules {
-        let mut allowed = false;
-        for rule in rules {
-            if rule.action == "allow" {
-                if let Some(os) = &rule.os {
-                    if os.name.as_deref() == Some("windows") {
-                        allowed = true;
-                    }
-                } else {
-                    allowed = true; // No OS specified, globally allowed
-                }
-            } else if rule.action == "disallow" {
-                if let Some(os) = &rule.os {
-                    if os.name.as_deref() == Some("windows") {
-                        allowed = false;
-                    }
-                }
-            }
-        }
-        return allowed;
-    }
-    true // If no rules, implicitly allowed
-}
+use crate::models::manifest::VersionMeta;
+use std::collections::HashMap;
+use crate::core::rules::evaluate_rules;
 
 pub async fn download_libraries(meta: &VersionMeta, app: Option<tauri::AppHandle>, instance_id: &str) -> Result<(), anyhow::Error> {
     let mut tasks = Vec::new();
     let lib_dir = paths::get_libraries_dir();
+    let active_features = HashMap::new();
 
     for lib in &meta.libraries {
-        if !match_rule(&lib.rules) {
-            continue;
+        if let Some(rules) = &lib.rules {
+            if !evaluate_rules(rules, &active_features) {
+                continue;
+            }
         }
 
         // 1. Download regular artifact
@@ -51,9 +30,23 @@ pub async fn download_libraries(meta: &VersionMeta, app: Option<tauri::AppHandle
 
             // 2. Download natives
             if let Some(natives) = &lib.natives {
-                if let Some(native_classifier) = natives.get("windows") { // TODO: dynamic OS
-                    // Replace "${arch}" with actual architecture (e.g. "64") if present in the string
-                    let actual_classifier = native_classifier.replace("${arch}", "64");
+                #[cfg(target_os = "windows")]
+                let os_key = "windows";
+                #[cfg(target_os = "macos")]
+                let os_key = "osx";
+                #[cfg(target_os = "linux")]
+                let os_key = "linux";
+
+                if let Some(native_classifier) = natives.get(os_key) {
+                    // Replace "${arch}" with actual architecture
+                    #[cfg(target_arch = "x86_64")]
+                    let arch_str = "64";
+                    #[cfg(target_arch = "x86")]
+                    let arch_str = "32";
+                    #[cfg(target_arch = "aarch64")]
+                    let arch_str = "arm64";
+
+                    let actual_classifier = native_classifier.replace("${arch}", arch_str);
                     
                     if let Some(classifiers) = &downloads.classifiers {
                         if let Some(native_artifact) = classifiers.get(&actual_classifier) {

@@ -17,12 +17,23 @@ pub fn extract_natives(meta: &VersionMeta) -> Result<PathBuf, anyhow::Error> {
     let lib_dir = paths::get_libraries_dir();
 
     for lib in &meta.libraries {
-        // Skip if not meant for this OS
-        // if !match_rule(&lib.rules) { continue; } // Note: Assuming already checked during download
-
         if let Some(natives) = &lib.natives {
-            if let Some(native_classifier) = natives.get("windows") { // TODO: Dynamic OS detection
-                let actual_classifier = native_classifier.replace("${arch}", "64");
+            #[cfg(target_os = "windows")]
+            let os_key = "windows";
+            #[cfg(target_os = "macos")]
+            let os_key = "osx";
+            #[cfg(target_os = "linux")]
+            let os_key = "linux";
+
+            if let Some(native_classifier) = natives.get(os_key) {
+                #[cfg(target_arch = "x86_64")]
+                let arch_str = "64";
+                #[cfg(target_arch = "x86")]
+                let arch_str = "32";
+                #[cfg(target_arch = "aarch64")]
+                let arch_str = "arm64";
+
+                let actual_classifier = native_classifier.replace("${arch}", arch_str);
 
                 if let Some(downloads) = &lib.downloads {
                     if let Some(classifiers) = &downloads.classifiers {

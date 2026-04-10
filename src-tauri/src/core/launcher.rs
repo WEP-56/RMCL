@@ -2,6 +2,7 @@ use crate::core::paths;
 use crate::models::account::Account;
 use crate::models::manifest::{Argument, ArgumentValue, VersionMeta};
 use std::collections::HashMap;
+use crate::core::rules::evaluate_rules;
 
 pub struct LaunchOptions {
     pub account: Account,
@@ -14,8 +15,17 @@ pub struct LaunchOptions {
 pub fn build_classpath(meta: &VersionMeta) -> String {
     let lib_dir = paths::get_libraries_dir();
     let mut cp = Vec::new();
+    
+    let active_features = HashMap::new(); // Usually no features affect libraries but we provide an empty map
 
     for lib in &meta.libraries {
+        // Evaluate rules if they exist
+        if let Some(rules) = &lib.rules {
+            if !evaluate_rules(rules, &active_features) {
+                continue;
+            }
+        }
+
         if let Some(downloads) = &lib.downloads {
             if let Some(artifact) = &downloads.artifact {
                 let path = lib_dir.join(&artifact.path);
@@ -62,6 +72,7 @@ pub fn replace_placeholders(arg: &str, placeholders: &HashMap<&str, String>) -> 
 pub fn parse_arguments(
     args: &Vec<Argument>,
     placeholders: &HashMap<&str, String>,
+    features: &HashMap<String, bool>,
 ) -> Vec<String> {
     let mut result = Vec::new();
 
@@ -71,47 +82,7 @@ pub fn parse_arguments(
                 result.push(replace_placeholders(s, placeholders));
             }
             Argument::Rule { rules, value } => {
-                // If no rules match anything, default behavior is usually allow unless it's explicitly disallowed
-                let mut allowed = if rules.is_empty() { true } else { false };
-                let mut has_os_rule = false;
-                
-                // Extremely basic rule evaluation for OS compatibility
-                for rule in rules {
-                    let mut is_match = false;
-                    let mut condition_evaluated = false;
-
-                    if let Some(os) = &rule.os {
-                        has_os_rule = true;
-                        condition_evaluated = true;
-                        if let Some(name) = &os.name {
-                            #[cfg(target_os = "windows")]
-                            { is_match = name == "windows"; }
-                            
-                            #[cfg(target_os = "macos")]
-                            { is_match = name == "osx"; }
-                            
-                            #[cfg(target_os = "linux")]
-                            { is_match = name == "linux"; }
-                        } else {
-                            is_match = true;
-                        }
-                    }
-
-                    if !condition_evaluated {
-                        // e.g. features like is_demo_user, has_custom_resolution which we mostly assume true for now
-                        is_match = true;
-                    }
-
-                    if is_match {
-                        if rule.action == "allow" {
-                            allowed = true;
-                        } else if rule.action == "disallow" {
-                            allowed = false;
-                        }
-                    }
-                }
-                
-                if allowed {
+                if evaluate_rules(rules, features) {
                     match value {
                         ArgumentValue::Single(s) => {
                             result.push(replace_placeholders(s, placeholders));

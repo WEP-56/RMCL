@@ -16,3 +16,4 @@ pub mod paths;
 pub mod preset_manager;
 pub mod process_manager;
 pub mod resolver;
+pub mod rules;

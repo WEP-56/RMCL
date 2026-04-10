@@ -97,63 +97,34 @@ pub fn scan_java_installations() -> Vec<JavaInstallation> {
 }
 
 pub fn find_system_java() -> String {
-    // Try to execute `java -version` and if it works, return "java"
-    if Command::new("java").arg("-version").output().is_ok() {
-        return "java".to_string();
+    let installations = scan_java_installations();
+    if !installations.is_empty() {
+        return installations[0].path.clone();
     }
+    "java".to_string()
+}
 
-    // Try common Windows paths
-    if consts::OS == "windows" {
-        let common_paths = vec![
-            "C:\\Program Files\\Java",
-            "C:\\Program Files (x86)\\Java",
-            "C:\\Program Files\\Eclipse Adoptium",
-            "C:\\Program Files\\AdoptOpenJDK",
-        ];
+pub fn find_java_by_major_version(major_version: u32) -> Option<String> {
+    let installations = scan_java_installations();
+    for java in installations {
+        // basic version string parse like "1.8.0_302", "17.0.1", "21"
+        let parts: Vec<&str> = java.version.split(|c| c == '.' || c == '_' || c == '-').collect();
+        if parts.is_empty() { continue; }
         
-        for base in common_paths {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                for entry in entries.flatten() {
-                    let mut exe_path = entry.path();
-                    exe_path.push("bin");
-                    exe_path.push("javaw.exe");
-                    if exe_path.exists() {
-                        return exe_path.to_string_lossy().to_string();
-                    }
-                    
-                    let mut java_exe = entry.path();
-                    java_exe.push("bin");
-                    java_exe.push("java.exe");
-                    if java_exe.exists() {
-                        return java_exe.to_string_lossy().to_string();
-                    }
-                }
-            }
+        let mut parsed_major = 0;
+        if parts[0] == "1" && parts.len() > 1 {
+            // 1.8.0 -> 8
+            parsed_major = parts[1].parse::<u32>().unwrap_or(0);
+        } else {
+            // 17.0.1 -> 17
+            parsed_major = parts[0].parse::<u32>().unwrap_or(0);
+        }
+
+        if parsed_major == major_version {
+            return Some(java.path);
         }
     }
-
-    // Try common Linux/Mac paths
-    if consts::OS == "linux" {
-        let common_paths = vec![
-            "/usr/lib/jvm",
-            "/usr/java",
-        ];
-        
-        for base in common_paths {
-            if let Ok(entries) = std::fs::read_dir(base) {
-                for entry in entries.flatten() {
-                    let mut exe_path = entry.path();
-                    exe_path.push("bin");
-                    exe_path.push("java");
-                    if exe_path.exists() {
-                        return exe_path.to_string_lossy().to_string();
-                    }
-                }
-            }
-        }
-    }
-
-    "java".to_string() // Fallback
+    None
 }
 
 const ADOPTIUM_API_URL: &str = "https://api.adoptium.net/v3";

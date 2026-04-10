@@ -16,8 +16,7 @@ pub struct LocalMod {
 }
 
 pub fn get_instance_mods_dir(instance_id: &str) -> PathBuf {
-    let mut path = crate::core::instance::get_instances_dir();
-    path.push(instance_id);
+    let mut path = crate::core::instance::get_instance_game_dir(instance_id);
     path.push("mods");
     if !path.exists() {
         fs::create_dir_all(&path).unwrap();
@@ -26,9 +25,7 @@ pub fn get_instance_mods_dir(instance_id: &str) -> PathBuf {
 }
 
 pub fn get_instance_dir(instance_id: &str) -> PathBuf {
-    let mut path = crate::core::instance::get_instances_dir();
-    path.push(instance_id);
-    path
+    crate::core::instance::get_instance_dir(instance_id)
 }
 
 pub async fn install_mod_version(
@@ -105,7 +102,7 @@ pub async fn install_modpack(
     }
 
     let instance = crate::core::instance::create_instance(name.to_string(), mc_version.clone(), loader)?;
-    let instance_dir = get_instance_dir(&instance.id);
+    let instance_dir = crate::core::instance::get_instance_game_dir(&instance.id);
 
     // 4. Download all mods defined in the index
     let mut download_tasks = Vec::new();
@@ -226,7 +223,7 @@ pub fn delete_mod(instance_id: &str, mod_name: &str) -> Result<(), anyhow::Error
 }
 
 pub fn open_instance_folder(instance_id: &str) -> Result<(), anyhow::Error> {
-    let dir = get_instance_dir(instance_id);
+    let dir = crate::core::instance::get_instance_game_dir(instance_id);
     if !dir.exists() {
         return Err(anyhow::anyhow!("Instance directory does not exist"));
     }
@@ -253,7 +250,7 @@ pub fn open_instance_folder(instance_id: &str) -> Result<(), anyhow::Error> {
 
 pub async fn export_instance_to_modrinth(instance_id: &str, output_path: &str) -> Result<(), anyhow::Error> {
     let instance = crate::core::instance::get_instance_by_id(instance_id)?;
-    let instance_dir = get_instance_dir(instance_id);
+    let instance_dir = crate::core::instance::get_instance_game_dir(instance_id);
 
     // We only support exporting basic mrpack without actual mod files for now
     // A real implementation would query Modrinth API for each mod's SHA1/SHA512 to build the index

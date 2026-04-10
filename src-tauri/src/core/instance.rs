@@ -12,9 +12,23 @@ pub fn get_instances_dir() -> PathBuf {
     path
 }
 
+pub fn get_instance_dir(instance_id: &str) -> PathBuf {
+    let mut path = get_instances_dir();
+    path.push(instance_id);
+    path
+}
+
+pub fn get_instance_game_dir(instance_id: &str) -> PathBuf {
+    let mut path = get_instance_dir(instance_id);
+    path.push("game");
+    if !path.exists() {
+        fs::create_dir_all(&path).unwrap();
+    }
+    path
+}
+
 pub fn save_instance(instance: &Instance) -> Result<(), anyhow::Error> {
-    let mut instance_dir = get_instances_dir();
-    instance_dir.push(&instance.id);
+    let instance_dir = get_instance_dir(&instance.id);
     let config_path = instance_dir.join("instance.json");
     let json = serde_json::to_string_pretty(instance)?;
     fs::write(config_path, json)?;
@@ -38,13 +52,15 @@ pub fn create_instance(
         memory_max: Some(4096),
     };
 
-    let mut instance_dir = get_instances_dir();
-    instance_dir.push(&id);
+    let instance_dir = get_instance_dir(&id);
     fs::create_dir_all(&instance_dir)?;
 
     let config_path = instance_dir.join("instance.json");
     let json = serde_json::to_string_pretty(&instance)?;
     fs::write(config_path, json)?;
+
+    // create game dir
+    get_instance_game_dir(&id);
 
     Ok(instance)
 }
