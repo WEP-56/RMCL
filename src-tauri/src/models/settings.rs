@@ -6,6 +6,7 @@ pub struct AppSettings {
     pub java_path: String,
     pub max_memory: u32,
     pub game_directory: Option<String>,
+    pub download_source: Option<String>,
 }
 
 impl Default for AppSettings {
@@ -14,6 +15,7 @@ impl Default for AppSettings {
             java_path: "java".to_string(),
             max_memory: 2048,
             game_directory: None,
+            download_source: Some("Default".to_string()),
         }
     }
 }

@@ -22,13 +22,16 @@ import {
   DialogBody,
   DialogActions,
   DialogContent,
+  Dropdown,
+  Option
 } from '@fluentui/react-components';
-import { Folder, Coffee, Save, RotateCcw, Cpu, Search } from 'lucide-react';
+import { Folder, Coffee, Save, RotateCcw, Cpu, Search, Globe } from 'lucide-react';
 
 interface AppSettings {
   javaPath: string;
   maxMemory: number;
   gameDirectory: string | null;
+  downloadSource?: string;
 }
 
 interface JavaInstallation {
@@ -42,6 +45,7 @@ const Settings = () => {
     javaPath: 'java',
     maxMemory: 2048,
     gameDirectory: null,
+    downloadSource: 'Default',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -287,6 +291,28 @@ const Settings = () => {
               value={settings.maxMemory} 
               onChange={(_e, data) => setSettings({ ...settings, maxMemory: data.value })}
             />
+          </div>
+        </Card>
+
+        {/* Download Source Section */}
+        <Card style={{ 
+          backgroundColor: 'rgba(255,255,255,0.03)', 
+          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '12px',
+        }}>
+          <CardHeader
+            header={<Text weight="semibold" size={400} style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Globe size={18} color="#34D399" /> 下载源 (镜像)</Text>}
+            description={<Text size={200} style={{ color: 'gray' }}>为国内网络环境不佳的玩家提供更快的下载速度。更换后会在下一次下载生效。</Text>}
+          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+            <Dropdown 
+              value={settings.downloadSource || 'Default'}
+              onOptionSelect={(_e, data) => setSettings({ ...settings, downloadSource: data.optionValue as string })}
+              style={{ minWidth: '200px' }}
+            >
+              <Option value="Default">官方默认源 (Mojang/Fabric)</Option>
+              <Option value="BMCLAPI">BMCLAPI (国内高速镜像)</Option>
+            </Dropdown>
           </div>
         </Card>
 

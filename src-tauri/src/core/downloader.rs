@@ -47,9 +47,16 @@ pub async fn download_files(
     instance_id: &str,
     task_name: &str,
 ) -> Result<(), anyhow::Error> {
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .unwrap_or_default();
+        
     let total = tasks.len();
     let completed = Arc::new(AtomicUsize::new(0));
+    
+    let settings = crate::core::config::load_settings().unwrap_or_default();
+    let use_bmclapi = settings.download_source.as_deref() == Some("BMCLAPI");
 
     let fetches = stream::iter(tasks).map(|task| {
         let client = client.clone();
@@ -63,6 +70,23 @@ pub async fn download_files(
             let mut final_url = task.url.clone();
             if final_url.ends_with(':') {
                 final_url.pop();
+            }
+            
+            // Apply BMCLAPI Mirror if enabled
+            if use_bmclapi {
+                if final_url.starts_with("https://resources.download.minecraft.net") {
+                    final_url = final_url.replace("https://resources.download.minecraft.net", "https://bmclapi2.bangbang93.com/assets");
+                } else if final_url.starts_with("https://libraries.minecraft.net") {
+                    final_url = final_url.replace("https://libraries.minecraft.net", "https://bmclapi2.bangbang93.com/maven");
+                } else if final_url.starts_with("https://launcher.mojang.com") {
+                    final_url = final_url.replace("https://launcher.mojang.com", "https://bmclapi2.bangbang93.com");
+                } else if final_url.starts_with("https://piston-meta.mojang.com") {
+                    final_url = final_url.replace("https://piston-meta.mojang.com", "https://bmclapi2.bangbang93.com");
+                } else if final_url.starts_with("https://meta.fabricmc.net") {
+                    final_url = final_url.replace("https://meta.fabricmc.net", "https://bmclapi2.bangbang93.com/fabric-meta");
+                } else if final_url.starts_with("https://maven.fabricmc.net") {
+                    final_url = final_url.replace("https://maven.fabricmc.net", "https://bmclapi2.bangbang93.com/maven");
+                }
             }
 
             if check_file_validity(&task.path, &task.sha1) {
@@ -83,24 +107,44 @@ pub async fn download_files(
                 let _ = fs::create_dir_all(parent);
             }
 
-            match client.get(&final_url).send().await {
-                Ok(response) => {
-                    let status = response.status();
-                    if status.is_success() {
-                        if let Ok(bytes) = response.bytes().await {
-                            if let Err(e) = fs::write(&task.path, bytes) {
-                                return Err(anyhow::anyhow!("Failed to write file {:?}: {}", task.path, e));
+            let mut attempts = 0;
+            let max_attempts = 3;
+            let mut last_err = String::new();
+
+            while attempts < max_attempts {
+                match client.get(&final_url).send().await {
+                    Ok(response) => {
+                        let status = response.status();
+                        if status.is_success() {
+                            if let Ok(bytes) = response.bytes().await {
+                                if let Err(e) = fs::write(&task.path, bytes) {
+                                    return Err(anyhow::anyhow!("Failed to write file {:?}: {}", task.path, e));
+                                }
+                                // Check sha1 if needed after download
+                                if !check_file_validity(&task.path, &task.sha1) {
+                                    attempts += 1;
+                                    last_err = "SHA1 mismatch".to_string();
+                                    continue;
+                                }
+                                break; // Success
+                            } else {
+                                attempts += 1;
+                                last_err = "Failed to read bytes".to_string();
                             }
+                        } else {
+                            attempts += 1;
+                            last_err = format!("Status: {}", status);
                         }
-                    } else {
-                        return Err(anyhow::anyhow!("Failed to download {} (Status: {})", final_url, status));
+                    }
+                    Err(e) => {
+                        attempts += 1;
+                        last_err = format!("Request error: {}", e);
                     }
                 }
-                Err(e) => {
-                    // Try with a different client or without SSL verification as fallback if needed
-                    // But for now just return the error cleanly
-                    return Err(anyhow::anyhow!("Request error for `{}`: {}", final_url, e));
-                }
+            }
+
+            if attempts == max_attempts {
+                return Err(anyhow::anyhow!("Failed to download {} after {} attempts. Last error: {}", final_url, max_attempts, last_err));
             }
 
             // Report progress
