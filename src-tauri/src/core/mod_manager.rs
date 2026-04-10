@@ -262,7 +262,7 @@ pub async fn export_instance_to_modrinth(instance_id: &str, output_path: &str) -
 
     let file = File::create(output_path)?;
     let mut zip = zip::ZipWriter::new(file);
-    let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    let options: FileOptions<()> = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     // 1. Create a minimal index.json
     let mut deps = std::collections::HashMap::new();
