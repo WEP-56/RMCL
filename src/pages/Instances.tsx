@@ -39,6 +39,7 @@ interface LocalMod {
 interface Account {
   uuid: string;
   username: string;
+  account_type: 'Offline' | 'Microsoft';
 }
 
 import { useLauncher } from '../contexts/LauncherContext';
@@ -46,6 +47,7 @@ import { useLauncher } from '../contexts/LauncherContext';
 const Instances = () => {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState('');
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newName, setNewName] = useState('新实例');
@@ -80,6 +82,17 @@ const Instances = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (accounts.length === 0) {
+      setSelectedAccountId('');
+      return;
+    }
+
+    setSelectedAccountId((current) =>
+      accounts.some((account) => account.uuid === current) ? current : accounts[0].uuid
+    );
+  }, [accounts]);
 
   const handleCreate = async () => {
     if (!newName || !newVersion) {
@@ -129,6 +142,12 @@ const Instances = () => {
       return;
     }
     
+    const selectedAccount = accounts.find((account) => account.uuid === selectedAccountId) ?? accounts[0];
+    if (!selectedAccount) {
+      alert("Please select an account before launching.");
+      return;
+    }
+
     let javaPath = 'java';
     try {
       const settings = await invoke<{ javaPath: string }>('get_settings');
@@ -139,8 +158,13 @@ const Instances = () => {
       console.warn("获取设置失败，使用默认 java 路径", e);
     }
     
-    launchInstance(instanceId, accounts[0].username, javaPath);
+    launchInstance(instanceId, selectedAccount.uuid, javaPath);
   };
+
+  const selectedAccount = accounts.find((account) => account.uuid === selectedAccountId) ?? null;
+  const selectedAccountLabel = selectedAccount
+    ? `${selectedAccount.username} · ${selectedAccount.account_type === 'Microsoft' ? '微软' : '离线'}`
+    : undefined;
 
   const handleOpenManage = async (inst: Instance) => {
     setManageInstance(inst);
@@ -305,6 +329,28 @@ const Instances = () => {
             </DialogBody>
           </DialogSurface>
         </Dialog>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+        <div>
+          <Text weight="semibold" style={{ color: 'white', display: 'block' }}>启动账号</Text>
+          <Text size={200} style={{ color: 'rgba(255,255,255,0.55)' }}>
+            当前启动会注入这个账号的会话信息
+          </Text>
+        </div>
+        <Dropdown
+          placeholder={accounts.length === 0 ? '先添加账号' : '选择启动账号'}
+          value={selectedAccountLabel}
+          selectedOptions={selectedAccountId ? [selectedAccountId] : []}
+          onOptionSelect={(_e, data) => setSelectedAccountId((data.optionValue as string) ?? '')}
+          style={{ minWidth: '240px' }}
+        >
+          {accounts.map((account) => (
+            <Option key={account.uuid} value={account.uuid} text={`${account.username} (${account.account_type === 'Microsoft' ? '寰蒋' : '绂荤嚎'})`}>
+              {account.username} ({account.account_type === 'Microsoft' ? '微软' : '离线'})
+            </Option>
+          ))}
+        </Dropdown>
       </div>
 
       {loading ? (

@@ -215,7 +215,7 @@ pub async fn download_and_extract_java(
         return Err(anyhow::anyhow!("Failed to download Java from {}: {}", url, response.status()));
     }
 
-    let mut bytes = response.bytes().await?;
+    let bytes = response.bytes().await?;
     let mut file = File::create(&temp_file_path)?;
     file.write_all(&bytes)?;
 

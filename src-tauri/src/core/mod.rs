@@ -1,6 +1,5 @@
 pub mod assets_manager;
 pub mod auth;
-pub mod msa;
 pub mod config;
 pub mod download_manager;
 pub mod downloader;
@@ -11,8 +10,10 @@ pub mod launcher;
 pub mod minecraft;
 pub mod mod_manager;
 pub mod modrinth_api;
+pub mod msa;
 pub mod natives_extractor;
 pub mod paths;
+pub mod placeholders;
 pub mod preset_manager;
 pub mod process_manager;
 pub mod resolver;

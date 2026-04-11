@@ -8,16 +8,17 @@ pub struct VersionMeta {
     #[serde(rename = "type")]
     pub version_type: String,
     pub main_class: String,
-    
+
     pub inherits_from: Option<String>,
-    pub minecraft_arguments: Option<String>, 
+    pub minecraft_arguments: Option<String>,
     pub arguments: Option<Arguments>,
-    
+
     pub asset_index: Option<AssetIndex>,
     pub assets: Option<String>,
     pub downloads: Option<HashMap<String, Download>>,
     pub libraries: Vec<Library>,
     pub java_version: Option<JavaVersion>,
+    pub logging: Option<LoggingConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -108,6 +109,25 @@ pub struct AssetIndex {
 pub struct JavaVersion {
     pub component: String,
     pub major_version: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoggingConfig {
+    pub client: Option<LoggingClientConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoggingClientConfig {
+    pub argument: Option<String>,
+    pub file: Option<LoggingFile>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LoggingFile {
+    pub id: String,
+    pub sha1: String,
+    pub size: u64,
+    pub url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

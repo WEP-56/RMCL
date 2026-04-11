@@ -6,7 +6,6 @@ use crate::models::instance::{Instance, LoaderType};
 use crate::models::manifest::VersionMeta;
 use crate::models::modrinth::{SearchResult, Version};
 use crate::models::settings::AppSettings;
-use std::collections::HashMap;
 
 use tauri::Emitter;
 
@@ -103,12 +102,15 @@ async fn get_java_download_url(major_version: u32) -> Result<String, String> {
 async fn launch_minecraft(
     app: tauri::AppHandle,
     instance_id: String,
-    username: String,
+    account_uuid: String,
     java_path: String,
+    launch_features: Option<crate::core::launcher::LaunchFeatureOptions>,
 ) -> Result<(), String> {
     // 0. Get Instance info
     let _ = app.emit("mc-log", format!("[INFO] 正在获取实例配置: {}...", instance_id));
     let instance = core::instance::get_instance_by_id(&instance_id).map_err(|e| e.to_string())?;
+    let account = core::config::get_account_by_uuid(&account_uuid).map_err(|e| e.to_string())?;
+    let launch_features = launch_features.unwrap_or_default();
     let version_id = instance.mc_version.clone();
     
     let _ = app.emit("mc-log", "[INFO] 正在获取 Minecraft 版本清单...");
@@ -216,6 +218,11 @@ async fn launch_minecraft(
             .map_err(|e| e.to_string())?;
     }
 
+    // 3.5 Download logging config if needed
+    let logging_config_path = core::download_manager::download_logging_config(&meta, Some(app.clone()), &instance_id)
+        .await
+        .map_err(|e| e.to_string())?;
+
     // 4. Extract Natives
     let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
         instance_id: instance_id.clone(),
@@ -232,91 +239,36 @@ async fn launch_minecraft(
         progress: -1.0,
         text: "生成 Classpath".to_string(),
     });
-    let classpath = core::launcher::build_classpath(&meta);
+    let classpath = core::launcher::build_classpath_with_features(&meta, &launch_features.to_rule_map());
     
     // Log classpath length to terminal to help debug issues
     println!("[INFO] Classpath generated with length: {}", classpath.len());
 
     // 6. Build Placeholders
-    let mut placeholders = HashMap::new();
     let game_dir = core::instance::get_instance_game_dir(&instance_id);
-
-    placeholders.insert("auth_player_name", username.clone());
-    placeholders.insert("version_name", version_id.clone());
-    placeholders.insert("game_directory", game_dir.to_string_lossy().to_string());
-    placeholders.insert("assets_root", core::paths::get_assets_dir().to_string_lossy().to_string());
-    placeholders.insert("assets_index_name", meta.asset_index.map_or("".to_string(), |a| a.id));
-    placeholders.insert("auth_uuid", core::auth::generate_offline_uuid(&username));
-    placeholders.insert("auth_access_token", "null".to_string());
-    placeholders.insert("user_type", "mojang".to_string()); // or msa
-    placeholders.insert("clientid", "null".to_string());
-    placeholders.insert("auth_xuid", "null".to_string());
-    placeholders.insert("user_properties", "{}".to_string());
-    placeholders.insert("version_type", meta.version_type.clone());
-    placeholders.insert("resolution_width", "854".to_string());
-    placeholders.insert("resolution_height", "480".to_string());
-    placeholders.insert("natives_directory", natives_dir.to_string_lossy().to_string());
-    placeholders.insert("launcher_name", "RustMCLauncher".to_string());
-    placeholders.insert("launcher_version", "0.1.0".to_string());
-    placeholders.insert("classpath", classpath.clone());
+    let placeholders = core::placeholders::build_default_placeholders(
+        &account,
+        &version_id,
+        &meta.version_type,
+        &game_dir,
+        &core::paths::get_assets_dir(),
+        meta.asset_index.as_ref().map(|asset| asset.id.as_str()),
+        &natives_dir,
+        &classpath,
+    )
+    .map_err(|e| e.to_string())?;
 
     // 7. Parse Arguments
-    let mut final_args = Vec::new();
-    
-    // Get max memory from settings
     let max_memory = core::config::load_settings().map(|s| s.max_memory).unwrap_or(2048);
-
-    // Add memory and Natives
-    final_args.push(format!("-Xmx{}M", max_memory));
-    
-    #[cfg(target_os = "macos")]
-    final_args.push("-XstartOnFirstThread".to_string());
-    
-    final_args.push("-XX:+UnlockExperimentalVMOptions".to_string());
-    final_args.push("-XX:+UseG1GC".to_string());
-    final_args.push("-XX:G1NewSizePercent=20".to_string());
-    final_args.push("-XX:G1ReservePercent=20".to_string());
-    final_args.push("-XX:MaxGCPauseMillis=50".to_string());
-    final_args.push("-XX:G1HeapRegionSize=32M".to_string());
-    final_args.push(format!("-Djava.library.path={}", natives_dir.to_string_lossy()));
-
-    let mut active_features = HashMap::new();
-    active_features.insert("is_demo_user".to_string(), false);
-    active_features.insert("has_custom_resolution".to_string(), true);
-    active_features.insert("has_quick_plays_support".to_string(), false);
-
-    // For modern versions
-    if let Some(args) = &meta.arguments {
-        if let Some(jvm_args) = &args.jvm {
-            let parsed_jvm_args = core::launcher::parse_arguments(jvm_args, &placeholders, &active_features);
-            
-            // Strip out `-XstartOnFirstThread` from json arguments if not on macos
-            #[cfg(not(target_os = "macos"))]
-            let parsed_jvm_args: Vec<String> = parsed_jvm_args.into_iter().filter(|s| !s.contains("-XstartOnFirstThread")).collect();
-            
-            final_args.extend(parsed_jvm_args);
-        } else {
-            // Some versions have `arguments` but no `jvm` object, so we must manually add the classpath
-            final_args.push("-cp".to_string());
-            final_args.push(classpath.clone());
-        }
-        
-        final_args.push(meta.main_class.clone());
-
-        if let Some(game_args) = &args.game {
-            final_args.extend(core::launcher::parse_arguments(game_args, &placeholders, &active_features));
-        }
-    } else {
-        // Fallback for old versions (1.12.2 and older)
-        final_args.push("-cp".to_string());
-        final_args.push(classpath.clone());
-        
-        final_args.push(meta.main_class.clone());
-        if let Some(mc_args) = &meta.minecraft_arguments {
-            let parsed_old = mc_args.split_whitespace().map(|s| core::launcher::replace_placeholders(s, &placeholders)).collect::<Vec<String>>();
-            final_args.extend(parsed_old);
-        }
-    }
+    let final_args = core::launcher::build_launch_command_args(
+        &meta,
+        &placeholders,
+        &classpath,
+        &natives_dir,
+        max_memory,
+        &launch_features,
+        logging_config_path.as_deref(),
+    );
 
     let working_dir = game_dir.to_string_lossy().to_string();
 

@@ -15,7 +15,7 @@ interface LauncherContextType {
   launchStatus: LaunchStatus;
   activeInstanceId: string | null;
   progressData: ProgressPayload | null;
-  launchInstance: (instanceId: string, username: string, javaPath: string) => Promise<void>;
+  launchInstance: (instanceId: string, accountUuid: string, javaPath: string) => Promise<void>;
   resetLaunch: () => void;
 }
 
@@ -60,7 +60,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [activeInstanceId, activeTempId]);
 
-  const launchInstance = async (instanceId: string, username: string, javaPath: string) => {
+  const launchInstance = async (instanceId: string, accountUuid: string, javaPath: string) => {
     if (launchStatus !== 'idle' && launchStatus !== 'error') return;
     
     try {
@@ -75,7 +75,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
       
       await invoke('launch_minecraft', {
         instanceId,
-        username,
+        accountUuid,
         javaPath
       });
       

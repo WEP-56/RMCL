@@ -49,6 +49,13 @@ pub fn load_accounts() -> Result<Vec<Account>, anyhow::Error> {
     Ok(accounts)
 }
 
+pub fn get_account_by_uuid(uuid: &str) -> Result<Account, anyhow::Error> {
+    load_accounts()?
+        .into_iter()
+        .find(|account| account.uuid == uuid)
+        .ok_or_else(|| anyhow::anyhow!("Account not found: {}", uuid))
+}
+
 pub fn save_settings(settings: &AppSettings) -> Result<(), anyhow::Error> {
     let json = serde_json::to_string_pretty(settings)?;
     fs::write(get_settings_file(), json)?;
