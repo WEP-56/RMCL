@@ -15,6 +15,7 @@ interface LauncherContextType {
   launchStatus: LaunchStatus;
   activeInstanceId: string | null;
   progressData: ProgressPayload | null;
+  logLines: string[];
   launchInstance: (instanceId: string, accountUuid: string, javaPath: string) => Promise<void>;
   resetLaunch: () => void;
 }
@@ -26,6 +27,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
   const [activeInstanceId, setActiveInstanceId] = useState<string | null>(null);
   const [activeTempId, setActiveTempId] = useState<string | null>(null);
   const [progressData, setProgressData] = useState<ProgressPayload | null>(null);
+  const [logLines, setLogLines] = useState<string[]>([]);
 
   useEffect(() => {
     const unlistenProgress = listen<ProgressPayload>('mc-progress', (event) => {
@@ -36,6 +38,13 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
       if (!activeInstanceId && !activeTempId) {
         setActiveTempId(event.payload.instance_id);
       }
+    });
+
+    const unlistenLog = listen<string>('mc-log', (event) => {
+      setLogLines((current) => {
+        const next = [...current, event.payload];
+        return next.slice(-400);
+      });
     });
 
     const unlistenExit = listen<number>('mc-exit', (event) => {
@@ -56,6 +65,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
 
     return () => {
       unlistenProgress.then((f) => f());
+      unlistenLog.then((f) => f());
       unlistenExit.then((f) => f());
     };
   }, [activeInstanceId, activeTempId]);
@@ -66,6 +76,7 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
     try {
       setActiveInstanceId(instanceId);
       setLaunchStatus('preparing');
+      setLogLines([]);
       setProgressData({
         instance_id: instanceId,
         task: '准备启动环境...',
@@ -103,10 +114,11 @@ export const LauncherProvider = ({ children }: { children: ReactNode }) => {
     setActiveInstanceId(null);
     setActiveTempId(null);
     setProgressData(null);
+    setLogLines([]);
   };
 
   return (
-    <LauncherContext.Provider value={{ launchStatus, activeInstanceId: activeInstanceId || activeTempId, progressData, launchInstance, resetLaunch }}>
+    <LauncherContext.Provider value={{ launchStatus, activeInstanceId: activeInstanceId || activeTempId, progressData, logLines, launchInstance, resetLaunch }}>
       {children}
     </LauncherContext.Provider>
   );

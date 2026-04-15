@@ -20,7 +20,7 @@ import {
   Label,
   Tag
 } from '@fluentui/react-components';
-import { Play, Plus, Trash2, Box, Settings as SettingsIcon, Package, Zap, FolderOpen, Download } from 'lucide-react';
+import { Play, Plus, Trash2, Box, Settings as SettingsIcon, Package, Zap, FolderOpen, Download, RefreshCw, FileText } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 
 interface Instance {
@@ -34,6 +34,12 @@ interface LocalMod {
   name: string;
   path: string;
   enabled: boolean;
+}
+
+interface LaunchLogFile {
+  file_name: string;
+  modified_ms: number;
+  size: number;
 }
 
 interface Account {
@@ -62,8 +68,13 @@ const Instances = () => {
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [localMods, setLocalMods] = useState<LocalMod[]>([]);
   const [modsLoading, setModsLoading] = useState(false);
+  const [launchLogs, setLaunchLogs] = useState<LaunchLogFile[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [selectedLogFile, setSelectedLogFile] = useState('');
+  const [selectedLogContent, setSelectedLogContent] = useState('');
+  const [logContentLoading, setLogContentLoading] = useState(false);
 
-  const { launchStatus, activeInstanceId, progressData, launchInstance, resetLaunch } = useLauncher();
+  const { launchStatus, activeInstanceId, progressData, logLines, launchInstance, resetLaunch } = useLauncher();
 
   const fetchData = async () => {
     try {
@@ -93,6 +104,12 @@ const Instances = () => {
       accounts.some((account) => account.uuid === current) ? current : accounts[0].uuid
     );
   }, [accounts]);
+
+  useEffect(() => {
+    if (manageDialogOpen && manageInstance && launchStatus === 'idle') {
+      fetchLaunchLogs(manageInstance.id);
+    }
+  }, [manageDialogOpen, manageInstance, launchStatus]);
 
   const handleCreate = async () => {
     if (!newName || !newVersion) {
@@ -165,11 +182,53 @@ const Instances = () => {
   const selectedAccountLabel = selectedAccount
     ? `${selectedAccount.username} · ${selectedAccount.account_type === 'Microsoft' ? '微软' : '离线'}`
     : undefined;
+  const selectedAccountDisplay = selectedAccountLabel && selectedAccount
+    ? `${selectedAccount.username} - ${selectedAccount.account_type === 'Microsoft' ? 'Microsoft' : 'Offline'}`
+    : undefined;
+  const isViewingLiveLog = manageInstance?.id === activeInstanceId && logLines.length > 0;
 
   const handleOpenManage = async (inst: Instance) => {
     setManageInstance(inst);
     setManageDialogOpen(true);
     fetchMods(inst.id);
+    fetchLaunchLogs(inst.id);
+  };
+
+  const readLaunchLog = async (instanceId: string, fileName: string) => {
+    try {
+      setLogContentLoading(true);
+      const content = await invoke<string>('read_instance_launch_log', { instanceId, fileName });
+      setSelectedLogFile(fileName);
+      setSelectedLogContent(content);
+    } catch (e) {
+      console.error(e);
+      setSelectedLogContent(String(e));
+    } finally {
+      setLogContentLoading(false);
+    }
+  };
+
+  const fetchLaunchLogs = async (instanceId: string) => {
+    try {
+      setLogsLoading(true);
+      const logs = await invoke<LaunchLogFile[]>('get_instance_launch_logs', { instanceId });
+      setLaunchLogs(logs);
+
+      if (logs.length > 0) {
+        const preferred = logs.find((log) => log.file_name === selectedLogFile) ?? logs[0];
+        await readLaunchLog(instanceId, preferred.file_name);
+      } else {
+        setSelectedLogFile('');
+        setSelectedLogContent('');
+      }
+    } catch (e) {
+      console.error(e);
+      setLaunchLogs([]);
+      setSelectedLogFile('');
+      setSelectedLogContent(String(e));
+    } finally {
+      setLogsLoading(false);
+    }
   };
 
   const fetchMods = async (instanceId: string) => {
@@ -340,7 +399,7 @@ const Instances = () => {
         </div>
         <Dropdown
           placeholder={accounts.length === 0 ? '先添加账号' : '选择启动账号'}
-          value={selectedAccountLabel}
+          value={selectedAccountDisplay}
           selectedOptions={selectedAccountId ? [selectedAccountId] : []}
           onOptionSelect={(_e, data) => setSelectedAccountId((data.optionValue as string) ?? '')}
           style={{ minWidth: '240px' }}
@@ -475,7 +534,7 @@ const Instances = () => {
       {/* Removed the global real-time log terminal completely */}
 
       <Dialog open={manageDialogOpen} onOpenChange={(_e, data) => setManageDialogOpen(data.open)}>
-        <DialogSurface style={{ backgroundColor: '#2B2B2B', border: '1px solid rgba(255,255,255,0.1)', maxWidth: '600px' }}>
+        <DialogSurface style={{ backgroundColor: '#2B2B2B', border: '1px solid rgba(255,255,255,0.1)', maxWidth: '900px' }}>
           <DialogBody>
             <DialogTitle style={{ color: 'white' }}>实例管理: {manageInstance?.name}</DialogTitle>
             <DialogContent>
@@ -515,6 +574,97 @@ const Instances = () => {
                           <Button appearance="transparent" icon={<Trash2 size={16} color="#ff6b6b" />} onClick={() => handleDeleteMod(mod.name)} />
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text weight="semibold" style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={16} color="#60CDFF" /> 启动日志
+                    </Text>
+                    <Button
+                      appearance="secondary"
+                      size="small"
+                      icon={<RefreshCw size={14} />}
+                      onClick={() => manageInstance && fetchLaunchLogs(manageInstance.id)}
+                      disabled={logsLoading || !manageInstance}
+                    >
+                      刷新
+                    </Button>
+                  </div>
+
+                  {isViewingLiveLog && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <Text size={200} style={{ color: '#60CDFF' }}>实时输出</Text>
+                      <textarea
+                        readOnly
+                        value={logLines.join('\n')}
+                        style={{
+                          width: '100%',
+                          minHeight: '160px',
+                          maxHeight: '240px',
+                          resize: 'vertical',
+                          backgroundColor: 'rgba(0,0,0,0.35)',
+                          color: '#d7e3f4',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          fontFamily: 'Consolas, Monaco, monospace',
+                          fontSize: '12px',
+                          lineHeight: 1.5
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {logsLoading ? (
+                    <Spinner size="tiny" />
+                  ) : launchLogs.length === 0 ? (
+                    <Text style={{ color: '#aaa' }}>还没有历史启动日志。</Text>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <Dropdown
+                        placeholder="选择历史日志"
+                        value={selectedLogFile || undefined}
+                        selectedOptions={selectedLogFile ? [selectedLogFile] : []}
+                        onOptionSelect={(_e, data) => {
+                          if (manageInstance && data.optionValue) {
+                            void readLaunchLog(manageInstance.id, data.optionValue as string);
+                          }
+                        }}
+                      >
+                        {launchLogs.map((log) => (
+                          <Option key={log.file_name} value={log.file_name} text={log.file_name}>
+                            {log.file_name}
+                          </Option>
+                        ))}
+                      </Dropdown>
+                      <Text size={100} style={{ color: 'rgba(255,255,255,0.45)' }}>
+                        已发现 {launchLogs.length} 份日志。当前选择：{selectedLogFile || '未选择'}
+                      </Text>
+                      {logContentLoading ? (
+                        <Spinner size="tiny" />
+                      ) : (
+                        <textarea
+                          readOnly
+                          value={selectedLogContent}
+                          style={{
+                            width: '100%',
+                            minHeight: '220px',
+                            maxHeight: '320px',
+                            resize: 'vertical',
+                            backgroundColor: 'rgba(0,0,0,0.35)',
+                            color: '#d7e3f4',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: '8px',
+                            padding: '12px',
+                            fontFamily: 'Consolas, Monaco, monospace',
+                            fontSize: '12px',
+                            lineHeight: 1.5
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                 </div>

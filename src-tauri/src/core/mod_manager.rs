@@ -16,12 +16,7 @@ pub struct LocalMod {
 }
 
 pub fn get_instance_mods_dir(instance_id: &str) -> PathBuf {
-    let mut path = crate::core::instance::get_instance_game_dir(instance_id);
-    path.push("mods");
-    if !path.exists() {
-        fs::create_dir_all(&path).unwrap();
-    }
-    path
+    crate::core::instance::get_instance_mods_dir(instance_id)
 }
 
 pub fn get_instance_dir(instance_id: &str) -> PathBuf {

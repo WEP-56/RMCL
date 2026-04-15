@@ -7,6 +7,7 @@ pub mod fabric_manager;
 pub mod instance;
 pub mod java_manager;
 pub mod launcher;
+pub mod launch_log;
 pub mod minecraft;
 pub mod mod_manager;
 pub mod modrinth_api;

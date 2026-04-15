@@ -1,12 +1,10 @@
-use crate::core::paths;
+use crate::core::instance;
 use crate::models::manifest::VersionMeta;
 use std::fs;
 use std::path::PathBuf;
 
-pub fn extract_natives(meta: &VersionMeta) -> Result<PathBuf, anyhow::Error> {
-    let mut natives_dir = paths::get_versions_dir();
-    natives_dir.push(&meta.id);
-    natives_dir.push("natives");
+pub fn extract_natives(instance_id: &str, meta: &VersionMeta) -> Result<PathBuf, anyhow::Error> {
+    let natives_dir = instance::get_instance_natives_dir(instance_id);
 
     // Clean up old natives dir if it exists
     if natives_dir.exists() {
@@ -14,7 +12,7 @@ pub fn extract_natives(meta: &VersionMeta) -> Result<PathBuf, anyhow::Error> {
     }
     fs::create_dir_all(&natives_dir)?;
 
-    let lib_dir = paths::get_libraries_dir();
+    let lib_dir = crate::core::paths::get_libraries_dir();
 
     for lib in &meta.libraries {
         if let Some(natives) = &lib.natives {

@@ -6,12 +6,20 @@ use crate::models::instance::{Instance, LoaderType};
 use crate::models::manifest::VersionMeta;
 use crate::models::modrinth::{SearchResult, Version};
 use crate::models::settings::AppSettings;
+use std::path::Path;
 
 use tauri::Emitter;
 
 use crate::core::java_manager::JavaInstallation;
+use crate::core::launch_log::LaunchLogFile;
 
 use crate::core::mod_manager::LocalMod;
+
+fn emit_launch_log(app: &tauri::AppHandle, log_path: &Path, message: impl Into<String>) {
+    let line = message.into();
+    let _ = crate::core::launch_log::append_log_line(log_path, &line);
+    let _ = app.emit("mc-log", line);
+}
 
 #[tauri::command]
 async fn export_instance(instance_id: String, output_path: String) -> Result<(), String> {
@@ -21,6 +29,16 @@ async fn export_instance(instance_id: String, output_path: String) -> Result<(),
 #[tauri::command]
 fn get_local_mods(instance_id: String) -> Result<Vec<LocalMod>, String> {
     crate::core::mod_manager::get_local_mods(&instance_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_instance_launch_logs(instance_id: String) -> Result<Vec<LaunchLogFile>, String> {
+    crate::core::launch_log::list_launch_logs(&instance_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn read_instance_launch_log(instance_id: String, file_name: String) -> Result<String, String> {
+    crate::core::launch_log::read_launch_log(&instance_id, &file_name).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -106,41 +124,42 @@ async fn launch_minecraft(
     java_path: String,
     launch_features: Option<crate::core::launcher::LaunchFeatureOptions>,
 ) -> Result<(), String> {
+    let launch_log_path = core::launch_log::create_launch_log(&instance_id).map_err(|e| e.to_string())?;
     // 0. Get Instance info
-    let _ = app.emit("mc-log", format!("[INFO] 正在获取实例配置: {}...", instance_id));
+    emit_launch_log(&app, &launch_log_path, format!("[INFO] 正在获取实例配置: {}...", instance_id));
     let instance = core::instance::get_instance_by_id(&instance_id).map_err(|e| e.to_string())?;
     let account = core::config::get_account_by_uuid(&account_uuid).map_err(|e| e.to_string())?;
     let launch_features = launch_features.unwrap_or_default();
     let version_id = instance.mc_version.clone();
     
-    let _ = app.emit("mc-log", "[INFO] 正在获取 Minecraft 版本清单...");
+    emit_launch_log(&app, &launch_log_path, "[INFO] 正在获取 Minecraft 版本清单...");
     let manifest = core::minecraft::fetch_version_manifest().await.map_err(|e| e.to_string())?;
     let version_info = manifest.versions.iter().find(|v| v.id == version_id)
         .ok_or_else(|| format!("Version {} not found in mojang manifest", version_id))?;
     
     let url = &version_info.url;
-    let mut meta = core::resolver::fetch_version_meta(&version_id, url)
+    let mut meta = core::resolver::fetch_resolved_version_meta_with_manifest(&version_id, url, &manifest)
         .await
         .map_err(|e| e.to_string())?;
 
     // Resolve Java path based on version requirement
-    let _ = app.emit("mc-log", "[INFO] 正在探测本地 Java 运行环境...");
+    emit_launch_log(&app, &launch_log_path, "[INFO] 正在探测本地 Java 运行环境...");
     let mut resolved_java_path = java_path;
     if resolved_java_path == "java" {
         if let Some(java_req) = &meta.java_version {
-            let _ = app.emit("mc-log", format!("[INFO] 游戏版本要求 Java 主版本: {}", java_req.major_version));
+            emit_launch_log(&app, &launch_log_path, format!("[INFO] 游戏版本要求 Java 主版本: {}", java_req.major_version));
             if let Some(matched_java) = core::java_manager::find_java_by_major_version(java_req.major_version) {
                 resolved_java_path = matched_java;
-                let _ = app.emit("mc-log", format!("[INFO] 匹配到合适的 Java: {}", resolved_java_path));
+                emit_launch_log(&app, &launch_log_path, format!("[INFO] 匹配到合适的 Java: {}", resolved_java_path));
             } else {
-                let _ = app.emit("mc-log", format!("[WARN] 未能找到符合要求 (Java {}) 的本地运行环境，正在尝试自动下载...", java_req.major_version));
+                emit_launch_log(&app, &launch_log_path, format!("[WARN] 未能找到符合要求 (Java {}) 的本地运行环境，正在尝试自动下载...", java_req.major_version));
                 match core::java_manager::download_and_extract_java(java_req.major_version, app.clone(), &instance_id).await {
                     Ok(downloaded_java) => {
                         resolved_java_path = downloaded_java;
-                        let _ = app.emit("mc-log", format!("[INFO] 成功下载并配置了 Java: {}", resolved_java_path));
+                        emit_launch_log(&app, &launch_log_path, format!("[INFO] 成功下载并配置了 Java: {}", resolved_java_path));
                     }
                     Err(e) => {
-                        let _ = app.emit("mc-log", format!("[ERROR] 自动下载 Java 失败: {}。将尝试使用系统默认 Java", e));
+                        emit_launch_log(&app, &launch_log_path, format!("[ERROR] 自动下载 Java 失败: {}。将尝试使用系统默认 Java", e));
                         resolved_java_path = core::java_manager::find_system_java();
                     }
                 }
@@ -166,7 +185,7 @@ async fn launch_minecraft(
 
     // 1.5 If Fabric, merge the Fabric meta
     if let LoaderType::Fabric = instance.loader {
-        let _ = app.emit("mc-log", "[INFO] 检测到 Fabric，正在合并核心库...");
+        emit_launch_log(&app, &launch_log_path, "[INFO] 检测到 Fabric，正在合并核心库...");
         if let Some(loader_ver) = &instance.loader_version {
             let fabric_meta = core::fabric_manager::fetch_fabric_meta(&version_id, loader_ver).await.map_err(|e| e.to_string())?;
             // Simple merge: add fabric libraries to vanilla meta
@@ -230,7 +249,7 @@ async fn launch_minecraft(
         progress: -1.0,
         text: "提取 Natives 中".to_string(),
     });
-    let natives_dir = core::natives_extractor::extract_natives(&meta).map_err(|e| e.to_string())?;
+    let natives_dir = core::natives_extractor::extract_natives(&instance_id, &meta).map_err(|e| e.to_string())?;
 
     // 5. Build Classpath
     let _ = app.emit("mc-progress", core::downloader::ProgressPayload {
@@ -279,7 +298,7 @@ async fn launch_minecraft(
         progress: -1.0,
         text: "拉起 Java".to_string(),
     });
-    core::process_manager::spawn_minecraft(app, &resolved_java_path, final_args, &working_dir)
+    core::process_manager::spawn_minecraft(app, &resolved_java_path, final_args, &working_dir, &launch_log_path)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -288,7 +307,7 @@ async fn launch_minecraft(
 
 #[tauri::command]
 async fn get_version_meta(version_id: String, url: String) -> Result<VersionMeta, String> {
-    core::resolver::fetch_version_meta(&version_id, &url).await.map_err(|e| e.to_string())
+    core::resolver::fetch_resolved_version_meta(&version_id, &url).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -385,6 +404,8 @@ pub fn run() {
       install_mod,
       install_modpack,
       get_local_mods,
+      get_instance_launch_logs,
+      read_instance_launch_log,
       toggle_mod,
       delete_mod,
       open_instance_folder,

@@ -3,13 +3,17 @@ use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
 
-pub fn get_instances_dir() -> PathBuf {
-    let mut path = crate::core::config::get_app_dir();
-    path.push("instances");
+fn ensure_dir(path: PathBuf) -> PathBuf {
     if !path.exists() {
         fs::create_dir_all(&path).unwrap();
     }
     path
+}
+
+pub fn get_instances_dir() -> PathBuf {
+    let mut path = crate::core::config::get_app_dir();
+    path.push("instances");
+    ensure_dir(path)
 }
 
 pub fn get_instance_dir(instance_id: &str) -> PathBuf {
@@ -21,10 +25,53 @@ pub fn get_instance_dir(instance_id: &str) -> PathBuf {
 pub fn get_instance_game_dir(instance_id: &str) -> PathBuf {
     let mut path = get_instance_dir(instance_id);
     path.push("game");
-    if !path.exists() {
-        fs::create_dir_all(&path).unwrap();
-    }
-    path
+    ensure_dir(path)
+}
+
+fn get_instance_game_subdir(instance_id: &str, name: &str) -> PathBuf {
+    let mut path = get_instance_game_dir(instance_id);
+    path.push(name);
+    ensure_dir(path)
+}
+
+pub fn get_instance_mods_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "mods")
+}
+
+pub fn get_instance_resourcepacks_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "resourcepacks")
+}
+
+pub fn get_instance_shaderpacks_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "shaderpacks")
+}
+
+pub fn get_instance_saves_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "saves")
+}
+
+pub fn get_instance_logs_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "logs")
+}
+
+pub fn get_instance_config_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "config")
+}
+
+pub fn get_instance_crash_reports_dir(instance_id: &str) -> PathBuf {
+    get_instance_game_subdir(instance_id, "crash-reports")
+}
+
+pub fn get_instance_work_dir(instance_id: &str) -> PathBuf {
+    let mut path = get_instance_dir(instance_id);
+    path.push("work");
+    ensure_dir(path)
+}
+
+pub fn get_instance_natives_dir(instance_id: &str) -> PathBuf {
+    let mut path = get_instance_work_dir(instance_id);
+    path.push("natives");
+    ensure_dir(path)
 }
 
 pub fn save_instance(instance: &Instance) -> Result<(), anyhow::Error> {
@@ -61,6 +108,14 @@ pub fn create_instance(
 
     // create game dir
     get_instance_game_dir(&id);
+    get_instance_mods_dir(&id);
+    get_instance_resourcepacks_dir(&id);
+    get_instance_shaderpacks_dir(&id);
+    get_instance_saves_dir(&id);
+    get_instance_logs_dir(&id);
+    get_instance_config_dir(&id);
+    get_instance_crash_reports_dir(&id);
+    get_instance_work_dir(&id);
 
     Ok(instance)
 }
