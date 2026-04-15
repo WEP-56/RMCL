@@ -100,7 +100,7 @@ const Settings = () => {
       const selected = await open({
         directory: true,
         multiple: false,
-        title: '选择游戏数据存储目录 (.minecraft)'
+        title: '选择共享运行时目录'
       });
       if (selected && typeof selected === 'string') {
         setSettings({ ...settings, gameDirectory: selected });
@@ -188,13 +188,13 @@ const Settings = () => {
           borderRadius: '12px',
         }}>
           <CardHeader
-            header={<Text weight="semibold" size={400} style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Folder size={18} color="#60CDFF" /> 游戏数据目录</Text>}
-            description={<Text size={200} style={{ color: 'gray' }}>自定义 `.minecraft` 文件夹的位置，所有的实例、模组、存档都会存储在此处。</Text>}
+            header={<Text weight="semibold" size={400} style={{ color: 'white', display: 'flex', alignItems: 'center', gap: '8px' }}><Folder size={18} color="#60CDFF" /> 共享运行时目录</Text>}
+            description={<Text size={200} style={{ color: 'gray' }}>自定义共享缓存目录。`assets`、`libraries`、`versions`、`java` 等运行时资源会存储在这里，实例自己的数据仍保存在独立实例目录中。</Text>}
           />
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
             <Input 
               value={settings.gameDirectory || ''} 
-              placeholder="默认路径 (AppData/Roaming/RustMCLauncher/.minecraft)" 
+              placeholder="默认路径 (AppData/Roaming/RustMCLauncher/runtime)" 
               readOnly
               style={{ flex: 1 }}
             />

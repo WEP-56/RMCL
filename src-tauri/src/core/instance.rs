@@ -1,6 +1,6 @@
 use crate::models::instance::{Instance, LoaderType};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
 
 fn ensure_dir(path: PathBuf) -> PathBuf {
@@ -72,6 +72,35 @@ pub fn get_instance_natives_dir(instance_id: &str) -> PathBuf {
     let mut path = get_instance_work_dir(instance_id);
     path.push("natives");
     ensure_dir(path)
+}
+
+pub fn resolve_instance_game_path(
+    instance_id: &str,
+    relative_path: impl AsRef<Path>,
+) -> Result<PathBuf, anyhow::Error> {
+    resolve_under_base(get_instance_game_dir(instance_id), relative_path.as_ref())
+}
+
+fn resolve_under_base(base: PathBuf, relative_path: &Path) -> Result<PathBuf, anyhow::Error> {
+    if relative_path.as_os_str().is_empty() {
+        return Ok(base);
+    }
+
+    let mut resolved = base;
+    for component in relative_path.components() {
+        match component {
+            Component::Normal(segment) => resolved.push(segment),
+            Component::CurDir => {}
+            Component::Prefix(_) | Component::RootDir | Component::ParentDir => {
+                return Err(anyhow::anyhow!(
+                    "Invalid relative path outside instance game directory: {}",
+                    relative_path.display()
+                ));
+            }
+        }
+    }
+
+    Ok(resolved)
 }
 
 pub fn save_instance(instance: &Instance) -> Result<(), anyhow::Error> {
@@ -156,4 +185,29 @@ pub fn delete_instance(id: &str) -> Result<(), anyhow::Error> {
         fs::remove_dir_all(dir)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_under_base_rejects_parent_components() {
+        let error = resolve_under_base(PathBuf::from("C:/base"), Path::new("../outside"))
+            .expect_err("parent dir should be rejected");
+
+        assert!(
+            error.to_string().contains("Invalid relative path"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn resolve_under_base_appends_normal_components() {
+        let resolved =
+            resolve_under_base(PathBuf::from("C:/base"), Path::new("config/options.txt"))
+                .expect("normal relative path should resolve");
+
+        assert_eq!(resolved, PathBuf::from("C:/base").join("config").join("options.txt"));
+    }
 }

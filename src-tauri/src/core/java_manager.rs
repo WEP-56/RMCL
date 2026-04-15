@@ -190,7 +190,7 @@ pub async fn download_and_extract_java(
         text: "正在下载 JRE".to_string(),
     });
 
-    let java_dir = crate::core::config::get_instances_dir().parent().unwrap().join("java");
+    let java_dir = crate::core::paths::get_java_dir();
     if !java_dir.exists() {
         fs::create_dir_all(&java_dir)?;
     }

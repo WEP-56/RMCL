@@ -97,7 +97,6 @@ pub async fn install_modpack(
     }
 
     let instance = crate::core::instance::create_instance(name.to_string(), mc_version.clone(), loader)?;
-    let instance_dir = crate::core::instance::get_instance_game_dir(&instance.id);
 
     // 4. Download all mods defined in the index
     let mut download_tasks = Vec::new();
@@ -108,7 +107,7 @@ pub async fn install_modpack(
             }
         }
 
-        let target_path = instance_dir.join(&file_info.path);
+        let target_path = crate::core::instance::resolve_instance_game_path(&instance.id, &file_info.path)?;
         
         if let Some(url) = file_info.downloads.first() {
             download_tasks.push(DownloadTask {
@@ -133,7 +132,7 @@ pub async fn install_modpack(
         };
 
         if let Ok(stripped) = outpath.strip_prefix("overrides/") {
-            let target_path = instance_dir.join(stripped);
+            let target_path = crate::core::instance::resolve_instance_game_path(&instance.id, stripped)?;
 
             if file.is_dir() {
                 fs::create_dir_all(&target_path)?;
